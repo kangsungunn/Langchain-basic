@@ -847,7 +847,8 @@ jobs:
             if [ "$response" = "200" ]; then
               echo "✅ Health check passed! (HTTP $response)"
               # 실제 응답 내용도 확인
-              curl -s "http://$EC2_HOST/health" | head -5
+              health_response=$(curl -s "http://$EC2_HOST/health" 2>&1)
+              echo "$health_response"
               SUCCESS=true
               break
             else
