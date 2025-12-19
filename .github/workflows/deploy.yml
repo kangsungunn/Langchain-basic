@@ -551,21 +551,55 @@ jobs:
             sudo systemctl restart langchain-api.service
 
             # 서비스 상태 확인
-            sleep 5
-            if sudo systemctl is-active --quiet langchain-api.service; then
-              echo "✅ Service is running!"
-              sudo systemctl status langchain-api.service --no-pager | head -20
+            sleep 8
+            echo "=== Service Status ==="
+            sudo systemctl status langchain-api.service --no-pager | head -30
 
-              # 포트 확인
+            # 서비스 로그 확인
+            echo "=== Recent Service Logs ==="
+            sudo journalctl -u langchain-api.service -n 30 --no-pager || echo "No logs available"
+
+            # 에러 로그 확인
+            echo "=== Error Logs ==="
+            if [ -f /var/log/langchain/error.log ]; then
+              tail -30 /var/log/langchain/error.log || echo "Error log file exists but cannot read"
+            else
+              echo "Error log file not found at /var/log/langchain/error.log"
+            fi
+
+            if sudo systemctl is-active --quiet langchain-api.service; then
+              echo "✅ Service is active!"
+
+              # 포트 확인 (ss 명령어 사용, netstat 대신)
               echo "🔍 Checking if service is listening on port 8000..."
-              sudo netstat -tlnp | grep 8000 || ss -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
+              if command -v ss >/dev/null 2>&1; then
+                sudo ss -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
+              elif command -v netstat >/dev/null 2>&1; then
+                sudo netstat -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
+              else
+                echo "⚠️ Installing net-tools for port checking..."
+                sudo apt install -y net-tools 2>/dev/null || true
+                sudo netstat -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
+              fi
+
+              # 프로세스 확인
+              echo "🔍 Checking uvicorn processes..."
+              ps aux | grep uvicorn | grep -v grep || echo "⚠️ No uvicorn processes found"
 
               # 로컬 헬스 체크
               echo "🏥 Testing local health endpoint..."
-              curl -f http://localhost:8000/health || echo "⚠️ Local health check failed"
+              sleep 3
+              if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+                echo "✅ Local health check passed!"
+                curl http://localhost:8000/health
+              else
+                echo "⚠️ Local health check failed"
+                echo "Trying to get response:"
+                curl -v http://localhost:8000/health 2>&1 | head -30 || echo "Connection failed"
+              fi
             else
-              echo "❌ Service failed to start!"
-              echo "=== Service Status ==="
+              echo "❌ Service failed to start or is not active!"
+              echo "=== Service Status (Full) ==="
               sudo systemctl status langchain-api.service --no-pager
               echo "=== Service File Content ==="
               sudo cat /etc/systemd/system/langchain-api.service
@@ -576,6 +610,9 @@ jobs:
               echo "Python exists: $([ -f /var/www/langchain/venv/bin/uvicorn ] && echo 'yes' || echo 'no')"
               echo "App file exists: $([ -f /var/www/langchain/app/api_server_refactored.py ] && echo 'yes' || echo 'no')"
               echo ".env exists: $([ -f /var/www/langchain/.env ] && echo 'yes' || echo 'no')"
+              echo "=== Testing manual import ==="
+              cd /var/www/langchain/app
+              /var/www/langchain/venv/bin/python3 -c "import sys; sys.path.insert(0, '/var/www/langchain/app'); from api_server_refactored import app; print('Import successful')" 2>&1 || echo "Import failed"
               exit 1
             fi
 
@@ -636,16 +673,40 @@ jobs:
           ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
             echo "=== Service Status ==="
             if systemctl list-unit-files | grep -q langchain-api.service; then
-              sudo systemctl status langchain-api.service --no-pager | head -10
+              sudo systemctl status langchain-api.service --no-pager | head -30
             else
               echo "⚠️ langchain-api.service not found"
             fi
 
+            echo -e "\n=== Service Logs (Last 30 lines) ==="
+            sudo journalctl -u langchain-api.service -n 30 --no-pager || echo "No logs available"
+
+            echo -e "\n=== Error Logs ==="
+            if [ -f /var/log/langchain/error.log ]; then
+              tail -30 /var/log/langchain/error.log || echo "Cannot read error log"
+            else
+              echo "Error log file not found at /var/log/langchain/error.log"
+            fi
+
             echo -e "\n=== Nginx Status ==="
-            sudo systemctl status nginx --no-pager | head -10 || echo "Nginx not running"
+            sudo systemctl status nginx --no-pager | head -15 || echo "Nginx not running"
 
             echo -e "\n=== Port Listening ==="
-            sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
+            if command -v ss >/dev/null 2>&1; then
+              sudo ss -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
+            elif command -v netstat >/dev/null 2>&1; then
+              sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
+            else
+              echo "Installing net-tools..."
+              sudo apt install -y net-tools 2>/dev/null || true
+              sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
+            fi
+
+            echo -e "\n=== Uvicorn Processes ==="
+            ps aux | grep uvicorn | grep -v grep || echo "No uvicorn processes found"
+
+            echo -e "\n=== Testing Local Connection ==="
+            curl -v http://localhost:8000/health 2>&1 | head -30 || echo "Local connection failed"
           ENDSSH
 
           # 헬스 체크 재시도 (최대 3번)
