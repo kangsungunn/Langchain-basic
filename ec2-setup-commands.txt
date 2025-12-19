@@ -1,0 +1,130 @@
+# ============================================
+# EC2 초기 설정 명령어 모음
+# EC2에 접속한 후 이 명령어들을 순서대로 실행하세요
+# ============================================
+
+# 1. 시스템 업데이트
+sudo apt update && sudo apt upgrade -y
+
+# 2. 필수 패키지 설치
+sudo apt install -y python3.11 python3.11-venv python3-pip git nginx curl htop
+
+# 3. 디렉토리 생성
+sudo mkdir -p /var/www/langchain /var/log/langchain
+sudo chown -R ubuntu:ubuntu /var/www/langchain /var/log/langchain
+
+# 4. Python 가상 환경 설정
+cd /var/www/langchain
+python3.11 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+
+# 5. .env 파일 생성 (⚠️ 나중에 실제 값으로 수정 필요)
+cat > /var/www/langchain/.env << 'EOF'
+OPENAI_API_KEY=your_openai_api_key_here
+POSTGRES_USER=neondb_owner
+POSTGRES_PASSWORD=your_password_here
+POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech
+POSTGRES_PORT=5432
+POSTGRES_DB=neondb
+LLM_PROVIDER=openai
+MIDM_MODEL_PATH=/var/www/langchain/models/midm
+HOST=0.0.0.0
+PORT=8000
+ENVIRONMENT=production
+EOF
+chmod 600 /var/www/langchain/.env
+
+# 6. Systemd 서비스 파일 생성
+sudo tee /etc/systemd/system/langchain-api.service > /dev/null << 'EOF'
+[Unit]
+Description=LangChain FastAPI Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/langchain
+Environment="PATH=/var/www/langchain/venv/bin"
+ExecStart=/var/www/langchain/venv/bin/uvicorn app.api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/langchain/access.log
+StandardError=append:/var/log/langchain/error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 7. Nginx 설정
+sudo tee /etc/nginx/sites-available/langchain > /dev/null << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        access_log off;
+    }
+}
+EOF
+
+sudo ln -sf /etc/nginx/sites-available/langchain /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
+# 8. Systemd 서비스 활성화
+sudo systemctl daemon-reload
+sudo systemctl enable langchain-api.service
+
+# 9. 방화벽 설정
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+echo "y" | sudo ufw enable
+
+# 10. 초기 코드 클론 (⚠️ YOUR_USERNAME/YOUR_REPO를 실제 값으로 변경)
+cd /var/www/langchain
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+
+# 11. 의존성 설치
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 12. .env 파일 편집 (실제 값 입력)
+nano /var/www/langchain/.env
+
+# 13. 서비스 시작
+sudo systemctl start langchain-api.service
+
+# 14. 상태 확인
+sudo systemctl status langchain-api.service
+
+# 15. 헬스 체크
+curl http://localhost:8000/health
+
+# ============================================
+# 완료! 이제 GitHub Actions가 자동으로 배포됩니다.
+# ============================================
+
+# 유용한 명령어들:
+# 로그 확인: sudo journalctl -u langchain-api.service -f
+# 서비스 재시작: sudo systemctl restart langchain-api.service
+# Nginx 재시작: sudo systemctl restart nginx
+# 파일 편집: nano /var/www/langchain/.env
+

@@ -1,0 +1,28 @@
+# LangChain core packages
+langchain-core>=0.3.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+
+# Vector store
+langchain-postgres>=0.0.12
+pgvector>=0.3.0
+psycopg2-binary>=2.9.9
+
+# Text processing
+langchain-text-splitters>=0.3.0
+
+# Web server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Additional utilities
+python-dotenv>=1.0.0
+
+# Local LLM support (Midm model - GPU + 4bit quantization)
+transformers>=4.36.0
+torch>=2.1.0
+langchain-huggingface>=0.0.1
+accelerate>=0.25.0
+sentencepiece>=0.1.99
+bitsandbytes>=0.41.0  # 4bit/8bit quantization
+
