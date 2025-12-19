@@ -69,6 +69,8 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
           if [ -z "$EC2_HOST" ] || [ -z "$EC2_USER" ]; then
             echo "❌ Error: EC2_HOST or EC2_USER secret is not set"
@@ -100,8 +102,12 @@ jobs:
           ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=10 \
-              $EC2_USER@$EC2_HOST << 'ENDSSH'
+              $EC2_USER@$EC2_HOST << ENDSSH
             set -e
+
+            # GitHub Secrets에서 전달된 환경 변수 설정
+            export OPENAI_API_KEY="$OPENAI_API_KEY"
+            export POSTGRES_PASSWORD="$POSTGRES_PASSWORD"
 
             echo "🚀 Starting deployment on EC2..."
 
@@ -383,12 +389,18 @@ jobs:
               echo "✅ Systemd service created and enabled"
             fi
 
-            # .env 파일 확인 및 생성 (없는 경우)
+            # .env 파일 확인 및 생성/업데이트
             if [ ! -f /var/www/langchain/.env ]; then
-              echo "⚠️ .env file not found, creating template..."
-              echo 'OPENAI_API_KEY=your_key_here' | sudo tee /var/www/langchain/.env > /dev/null
+              echo "⚠️ .env file not found, creating with GitHub Secrets..."
+
+              # GitHub Secrets에서 값 가져오기
+              OPENAI_KEY="${OPENAI_API_KEY:-your_key_here}"
+              POSTGRES_PASS="${POSTGRES_PASSWORD:-your_password_here}"
+
+              # .env 파일 생성
+              echo "OPENAI_API_KEY=$OPENAI_KEY" | sudo tee /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_USER=neondb_owner' | sudo tee -a /var/www/langchain/.env > /dev/null
-              echo 'POSTGRES_PASSWORD=your_password_here' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo "POSTGRES_PASSWORD=$POSTGRES_PASS" | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_PORT=5432' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_DB=neondb' | sudo tee -a /var/www/langchain/.env > /dev/null
@@ -396,15 +408,35 @@ jobs:
               echo 'HOST=0.0.0.0' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'PORT=8000' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'ENVIRONMENT=production' | sudo tee -a /var/www/langchain/.env > /dev/null
+
               sudo chmod 600 /var/www/langchain/.env
               sudo chown ubuntu:ubuntu /var/www/langchain/.env
-              echo "⚠️ Created .env template - please update with actual values!"
+
+              if [ "$OPENAI_KEY" = "your_key_here" ]; then
+                echo "⚠️ OPENAI_API_KEY not set in GitHub Secrets - using placeholder"
+              else
+                echo "✅ .env file created with GitHub Secrets"
+              fi
             else
-              echo "✅ .env file exists"
+              echo "✅ .env file exists, updating values..."
+
+              # OPENAI_API_KEY 업데이트 (GitHub Secrets에서)
+              if [ -n "$OPENAI_API_KEY" ]; then
+                sudo sed -i '/^OPENAI_API_KEY=/d' /var/www/langchain/.env
+                echo "OPENAI_API_KEY=$OPENAI_API_KEY" | sudo tee -a /var/www/langchain/.env > /dev/null
+                echo "✅ OPENAI_API_KEY updated from GitHub Secrets"
+              fi
+
+              # POSTGRES_PASSWORD 업데이트 (GitHub Secrets에서)
+              if [ -n "$POSTGRES_PASSWORD" ]; then
+                sudo sed -i '/^POSTGRES_PASSWORD=/d' /var/www/langchain/.env
+                echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" | sudo tee -a /var/www/langchain/.env > /dev/null
+                echo "✅ POSTGRES_PASSWORD updated from GitHub Secrets"
+              fi
+
               # LLM_PROVIDER가 openai로 설정되어 있는지 확인
               if ! grep -q "LLM_PROVIDER=openai" /var/www/langchain/.env; then
                 echo "⚠️ LLM_PROVIDER not set to openai, updating..."
-                # 기존 LLM_PROVIDER 라인 제거 후 추가
                 sudo sed -i '/^LLM_PROVIDER=/d' /var/www/langchain/.env
                 echo 'LLM_PROVIDER=openai' | sudo tee -a /var/www/langchain/.env > /dev/null
                 echo "✅ LLM_PROVIDER set to openai"
