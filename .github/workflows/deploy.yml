@@ -345,26 +345,24 @@ jobs:
               sudo chown -R ubuntu:ubuntu /var/log/langchain
 
               # Systemd 서비스 파일 생성
-              sudo tee /etc/systemd/system/langchain-api.service > /dev/null << 'EOFSERVICE'
-[Unit]
-Description=LangChain FastAPI Application
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/var/www/langchain/app
-Environment="PATH=/var/www/langchain/venv/bin"
-EnvironmentFile=/var/www/langchain/.env
-ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2
-Restart=always
-RestartSec=10
-StandardOutput=append:/var/log/langchain/access.log
-StandardError=append:/var/log/langchain/error.log
-
-[Install]
-WantedBy=multi-user.target
-EOFSERVICE
+              echo '[Unit]' | sudo tee /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'Description=LangChain FastAPI Application' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'After=network.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo '[Service]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'Type=simple' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'User=ubuntu' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'WorkingDirectory=/var/www/langchain/app' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'Environment="PATH=/var/www/langchain/venv/bin"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'StandardOutput=append:/var/log/langchain/access.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'StandardError=append:/var/log/langchain/error.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo '[Install]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
 
               # 서비스 활성화
               sudo systemctl daemon-reload
@@ -405,30 +403,28 @@ EOFSERVICE
               sudo apt install -y nginx
 
               # Nginx 설정
-              sudo tee /etc/nginx/sites-available/langchain > /dev/null << 'EOFNGINX'
-server {
-    listen 80;
-    server_name _;
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /health {
-        proxy_pass http://127.0.0.1:8000/health;
-        access_log off;
-    }
-}
-EOFNGINX
+              echo 'server {' | sudo tee /etc/nginx/sites-available/langchain > /dev/null
+              echo '    listen 80;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    server_name _;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    client_max_body_size 50M;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    location / {' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_pass http://127.0.0.1:8000;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_http_version 1.1;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header Upgrade $http_upgrade;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header Connection "upgrade";' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header Host $host;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_cache_bypass $http_upgrade;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header X-Real-IP $remote_addr;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_set_header X-Forwarded-Proto $scheme;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    }' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    location /health {' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_pass http://127.0.0.1:8000/health;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        access_log off;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '    }' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '}' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
 
               sudo ln -sf /etc/nginx/sites-available/langchain /etc/nginx/sites-enabled/
               sudo rm -f /etc/nginx/sites-enabled/default
