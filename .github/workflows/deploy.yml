@@ -117,15 +117,18 @@ jobs:
             AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
             echo "   Available space: $AVAILABLE_SPACE"
 
-            # 디스크 공간이 부족하면 정리
-            if [ "$(df / | tail -1 | awk '{print $4}' | sed 's/[^0-9]//g')" -lt 1000000 ]; then
-              echo "⚠️ Low disk space detected, cleaning up..."
+            # 디스크 공간이 부족하면 정리 (87% 이상 사용 시)
+            DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+            if [ "$DISK_USAGE" -gt 85 ]; then
+              echo "⚠️ Low disk space detected ($DISK_USAGE%), cleaning up..."
               # apt 캐시 정리
               sudo apt clean
               # 불필요한 패키지 제거
               sudo apt autoremove -y
               # 로그 파일 정리
-              sudo journalctl --vacuum-time=1d
+              sudo journalctl --vacuum-time=1d 2>/dev/null || true
+              # 임시 파일 정리
+              sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
               echo "✅ Cleanup completed"
               df -h /
             fi
@@ -139,23 +142,47 @@ jobs:
             PYTHON_CMD=""
 
             # Python 3.11 확인
-            if command -v python3.11 &> /dev/null; then
+            if command -v python3.11 &> /dev/null && python3.11 --version &> /dev/null; then
               PYTHON_CMD="python3.11"
               echo "✅ Python 3.11 found: $PYTHON_CMD"
             # Python 3 확인
-            elif command -v python3 &> /dev/null; then
-              PYTHON_CMD=$(command -v python3)
+            elif command -v python3 &> /dev/null && python3 --version &> /dev/null; then
+              PYTHON_CMD="python3"
               echo "✅ Found Python 3: $PYTHON_CMD"
             else
-              echo "❌ Python 3 not found! Installing Python 3 and venv..."
-              sudo apt update
-              sudo apt install -y python3 python3-pip python3-venv
-              PYTHON_CMD=$(command -v python3)
+              echo "⚠️ Python 3 not found in PATH, checking common locations..."
+              # 일반적인 Python 경로 확인
+              if [ -f /usr/bin/python3 ] && /usr/bin/python3 --version &> /dev/null; then
+                PYTHON_CMD="/usr/bin/python3"
+                echo "✅ Found Python 3 at: $PYTHON_CMD"
+              elif [ -f /usr/bin/python3.12 ] && /usr/bin/python3.12 --version &> /dev/null; then
+                PYTHON_CMD="/usr/bin/python3.12"
+                echo "✅ Found Python 3.12 at: $PYTHON_CMD"
+              else
+                echo "❌ Python 3 not found! Installing Python 3 and venv..."
+                sudo apt update
+                sudo apt install -y python3 python3-pip python3-venv
+                # 설치 후 다시 확인
+                if command -v python3 &> /dev/null; then
+                  PYTHON_CMD="python3"
+                elif [ -f /usr/bin/python3 ]; then
+                  PYTHON_CMD="/usr/bin/python3"
+                fi
+              fi
             fi
 
             # PYTHON_CMD가 여전히 비어있으면 에러
             if [ -z "$PYTHON_CMD" ]; then
               echo "❌ Failed to find or install Python!"
+              echo "Checking available Python installations:"
+              ls -la /usr/bin/python* 2>/dev/null || echo "No Python found in /usr/bin"
+              which python3 || echo "python3 not in PATH"
+              exit 1
+            fi
+
+            # Python 명령어가 실제로 작동하는지 확인
+            if ! $PYTHON_CMD --version &> /dev/null; then
+              echo "❌ Python command exists but doesn't work: $PYTHON_CMD"
               exit 1
             fi
 
@@ -163,6 +190,7 @@ jobs:
             PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
             echo "   Detected Python version: $PYTHON_VERSION"
             echo "   Python command: $PYTHON_CMD"
+            echo "   Python full path: $(which $PYTHON_CMD || echo $PYTHON_CMD)"
 
             # python3-venv 패키지 확인 및 설치
             echo "📦 Ensuring python3-venv package is installed..."
