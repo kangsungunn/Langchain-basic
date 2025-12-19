@@ -56,9 +56,11 @@ def get_vector_store() -> PGVector:
     db_settings = get_db_settings()
     embeddings_provider = get_embeddings()
 
+    # SSL 모드가 있는 경우 connection string에 추가
+    ssl_param = f"?sslmode={db_settings.sslmode}" if db_settings.sslmode else ""
     connection_string = (
         f"postgresql+psycopg2://{db_settings.user}:{db_settings.password}"
-        f"@{db_settings.host}:{db_settings.port}/{db_settings.name}"
+        f"@{db_settings.host}:{db_settings.port}/{db_settings.name}{ssl_param}"
     )
 
     return PGVector(

@@ -501,6 +501,7 @@ jobs:
               echo 'POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_PORT=5432' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'POSTGRES_DB=neondb' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_SSLMODE=require' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'LLM_PROVIDER=openai' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'HOST=0.0.0.0' | sudo tee -a /var/www/langchain/.env > /dev/null
               echo 'PORT=8000' | sudo tee -a /var/www/langchain/.env > /dev/null
@@ -658,8 +659,8 @@ jobs:
               echo "App file exists: $([ -f /var/www/langchain/app/api_server_refactored.py ] && echo 'yes' || echo 'no')"
               echo ".env exists: $([ -f /var/www/langchain/.env ] && echo 'yes' || echo 'no')"
               echo "=== Testing manual import ==="
-              cd /var/www/langchain/app
-              /var/www/langchain/venv/bin/python3 -c "import sys; sys.path.insert(0, '/var/www/langchain/app'); from api_server_refactored import app; print('Import successful')" 2>&1 || echo "Import failed"
+              cd /var/www/langchain
+              /var/www/langchain/venv/bin/python3 -c "import sys; sys.path.insert(0, '/var/www/langchain'); from app.api_server_refactored import app; print('Import successful')" 2>&1 || echo "Import failed"
               echo "=== Port status ==="
               sudo ss -tlnp | grep -E ':(80|8000)' || sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No services on ports 80 or 8000"
               exit 1

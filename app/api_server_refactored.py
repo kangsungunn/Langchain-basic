@@ -54,14 +54,24 @@ async def startup_event():
     """서버 시작 시 실행 - 모델 초기화"""
     print("🚀 FastAPI 서버 시작 중...")
 
-    # 의존성 초기화 (캐시에 저장됨)
-    llm = get_llm()
-    embeddings = get_embeddings()
-    vector_store = get_vector_store()
+    try:
+        # 의존성 초기화 (캐시에 저장됨)
+        llm = get_llm()
+        embeddings = get_embeddings()
+        print(f"✅ LLM 모델: {llm.get_model_name()}")
+        print(f"✅ Embeddings 모델: {embeddings.get_model_name()}")
+    except Exception as e:
+        print(f"⚠️ LLM/Embeddings 초기화 실패: {e}")
+        print("⚠️ 서버는 시작되지만 일부 기능이 제한될 수 있습니다.")
 
-    print(f"✅ LLM 모델: {llm.get_model_name()}")
-    print(f"✅ Embeddings 모델: {embeddings.get_model_name()}")
-    print(f"✅ 벡터 스토어 초기화 완료")
+    try:
+        vector_store = get_vector_store()
+        print(f"✅ 벡터 스토어 초기화 완료")
+    except Exception as e:
+        print(f"⚠️ 벡터 스토어 초기화 실패: {e}")
+        print("⚠️ RAG 기능이 작동하지 않을 수 있습니다. DB 연결을 확인하세요.")
+        print("⚠️ 서버는 시작되지만 RAG 기능은 사용할 수 없습니다.")
+
     print("✅ 서버 준비 완료!")
 
 

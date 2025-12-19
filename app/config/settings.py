@@ -18,6 +18,7 @@ class DatabaseSettings:
     password: str
     name: str
     collection_name: str
+    sslmode: str = "require"
 
 
 @lru_cache()
@@ -34,5 +35,6 @@ def get_db_settings() -> DatabaseSettings:
         password=os.getenv("POSTGRES_PASSWORD", "langchain123"),
         name=os.getenv("POSTGRES_DB", "vectordb"),
         collection_name=os.getenv("PGVECTOR_COLLECTION", "langchain_knowledge_base"),
+        sslmode=os.getenv("POSTGRES_SSLMODE", "require"),
     )
 
