@@ -151,67 +151,50 @@ jobs:
 
             # Python 버전 확인 및 설치
             echo "🐍 Checking Python installation..."
+
+            # Python 경로 직접 확인 (가장 확실한 방법)
             PYTHON_CMD=""
 
-            # 직접 경로 확인 (가장 확실한 방법) - 순차적으로 확인
+            # /usr/bin/python3.12 확인
             if [ -x /usr/bin/python3.12 ]; then
-              if /usr/bin/python3.12 --version &> /dev/null; then
-                PYTHON_CMD="/usr/bin/python3.12"
-                echo "✅ Found Python 3.12 at: $PYTHON_CMD"
-              fi
+              /usr/bin/python3.12 --version &> /dev/null && PYTHON_CMD="/usr/bin/python3.12"
             fi
 
-            if [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3 ]; then
-              if /usr/bin/python3 --version &> /dev/null; then
-                PYTHON_CMD="/usr/bin/python3"
-                echo "✅ Found Python 3 at: $PYTHON_CMD"
-              fi
-            fi
+            # /usr/bin/python3 확인
+            [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3 ] && /usr/bin/python3 --version &> /dev/null && PYTHON_CMD="/usr/bin/python3"
 
-            if [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3.11 ]; then
-              if /usr/bin/python3.11 --version &> /dev/null; then
-                PYTHON_CMD="/usr/bin/python3.11"
-                echo "✅ Found Python 3.11 at: $PYTHON_CMD"
-              fi
-            fi
+            # /usr/bin/python3.11 확인
+            [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3.11 ] && /usr/bin/python3.11 --version &> /dev/null && PYTHON_CMD="/usr/bin/python3.11"
 
             # command -v로 확인 (PATH에 있는 경우)
-            if [ -z "$PYTHON_CMD" ] && command -v python3.12 &> /dev/null; then
-              if python3.12 --version &> /dev/null; then
-                PYTHON_CMD="python3.12"
-                echo "✅ Python 3.12 found in PATH: $PYTHON_CMD"
-              fi
-            fi
+            [ -z "$PYTHON_CMD" ] && command -v python3.12 &> /dev/null && python3.12 --version &> /dev/null && PYTHON_CMD="python3.12"
+            [ -z "$PYTHON_CMD" ] && command -v python3 &> /dev/null && python3 --version &> /dev/null && PYTHON_CMD="python3"
 
-            if [ -z "$PYTHON_CMD" ] && command -v python3 &> /dev/null; then
-              if python3 --version &> /dev/null; then
-                PYTHON_CMD="python3"
-                echo "✅ Python 3 found in PATH: $PYTHON_CMD"
-              fi
-            fi
-
-            # 모두 실패하면 설치
-            if [ -z "$PYTHON_CMD" ]; then
+            # PYTHON_CMD 확인 및 출력
+            if [ -n "$PYTHON_CMD" ]; then
+              echo "✅ Found Python: $PYTHON_CMD"
+            else
               echo "⚠️ Python 3 not found! Installing Python 3 and venv..."
               sudo apt update
               sudo apt install -y python3 python3-pip python3-venv
               # 설치 후 다시 확인
-              if [ -x /usr/bin/python3 ]; then
-                PYTHON_CMD="/usr/bin/python3"
-                echo "✅ Python 3 installed and found at: $PYTHON_CMD"
-              elif command -v python3 &> /dev/null; then
-                PYTHON_CMD="python3"
-                echo "✅ Python 3 installed and found: $PYTHON_CMD"
-              fi
+              [ -x /usr/bin/python3 ] && /usr/bin/python3 --version &> /dev/null && PYTHON_CMD="/usr/bin/python3"
+              [ -z "$PYTHON_CMD" ] && command -v python3 &> /dev/null && python3 --version &> /dev/null && PYTHON_CMD="python3"
             fi
 
-            # PYTHON_CMD가 여전히 비어있으면 에러
+            # 최종 확인: PYTHON_CMD가 여전히 비어있으면 /usr/bin/python3 강제 사용
             if [ -z "$PYTHON_CMD" ]; then
-              echo "❌ Failed to find or install Python!"
-              echo "Checking available Python installations:"
-              ls -la /usr/bin/python* 2>/dev/null || echo "No Python found in /usr/bin"
-              which python3 2>/dev/null || echo "python3 not in PATH"
-              exit 1
+              echo "⚠️ PYTHON_CMD is empty, checking /usr/bin/python3..."
+              if [ -x /usr/bin/python3 ]; then
+                PYTHON_CMD="/usr/bin/python3"
+                echo "✅ Using /usr/bin/python3 directly: $PYTHON_CMD"
+              else
+                echo "❌ Failed to find or install Python!"
+                echo "Checking available Python installations:"
+                ls -la /usr/bin/python* 2>/dev/null || echo "No Python found in /usr/bin"
+                which python3 2>/dev/null || echo "python3 not in PATH"
+                exit 1
+              fi
             fi
 
             # Python 명령어가 실제로 작동하는지 확인
