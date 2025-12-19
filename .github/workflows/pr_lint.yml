@@ -59,7 +59,14 @@ jobs:
     name: "validate format"
     runs-on: ubuntu-latest
     # Dependabot PR은 검증 건너뛰기
-    if: github.actor != 'dependabot[bot]'
+    # 여러 조건으로 Dependabot PR 확인:
+    # 1. actor가 dependabot[bot]이 아니고
+    # 2. PR 제목이 "Bump"로 시작하지 않거나
+    # 3. PR 작성자가 bot이 아닌 경우에만 실행
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      !startsWith(github.event.pull_request.title, 'Bump') &&
+      github.event.pull_request.user.type != 'Bot'
     steps:
       - name: "✅ Validate Conventional Commits Format"
         uses: amannn/action-semantic-pull-request@v6
