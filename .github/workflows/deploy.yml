@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "app/**" # app 폴더 변경시에만 실행
-      - ".github/workflows/deploy.yml" # 워크플로우 파일 변경시에도 실행
+    # paths 필터 제거: 모든 푸시에서 실행 (배포는 app 폴더만 하므로 안전)
+    # 필요시 아래 주석을 해제하여 특정 경로만 트리거하도록 설정 가능
+    # paths:
+    #   - "app/**"
+    #   - ".github/workflows/deploy.yml"
   workflow_dispatch: # 수동 실행은 항상 가능
 
 jobs:
