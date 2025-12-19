@@ -171,15 +171,12 @@ scratch/
 
 *.pem
 
+models/ midm/ midm-2.0-mini-instruct/
+
 app/models/midm/model.safetensors
 app/models/midm/tokenizer.json
 app/models/midm/tokenizer_config.json
 app/models/midm/special_tokens_map.json
 app/models/midm/generation_config.json
 app/models/midm/config.json
-app/models/midm/model.safetensors
-app/models/midm/tokenizer.json
-app/models/midm/tokenizer_config.json
-app/models/midm/special_tokens_map.json
-app/models/midm/generation_config.json
-app/models/midm/config.json
+

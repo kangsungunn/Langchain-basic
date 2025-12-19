@@ -336,6 +336,16 @@ jobs:
             echo "💾 Disk space after installation:"
             df -h / | tail -1
 
+            # Midm 모델 확인 및 다운로드 (없는 경우)
+            if [ ! -d "models/midm" ] || [ -z "$(ls -A models/midm 2>/dev/null)" ]; then
+              echo "⚠️ Midm model not found, downloading..."
+              # Hugging Face에서 모델 다운로드 (필요시)
+              # python -c "from huggingface_hub import snapshot_download; snapshot_download('KT-AI/midm-2.0-mini-instruct', local_dir='models/midm')"
+              echo "ℹ️ Please download the model manually or configure automatic download"
+            else
+              echo "✅ Midm model found"
+            fi
+
             # Systemd 서비스 확인 및 설정
             if ! systemctl list-unit-files | grep -q langchain-api.service; then
               echo "⚙️  Creating systemd service..."
@@ -376,24 +386,36 @@ jobs:
             # .env 파일 확인 및 생성 (없는 경우)
             if [ ! -f /var/www/langchain/.env ]; then
               echo "⚠️ .env file not found, creating template..."
-              sudo tee /var/www/langchain/.env > /dev/null << 'ENVEOF'
-OPENAI_API_KEY=your_key_here
-POSTGRES_USER=neondb_owner
-POSTGRES_PASSWORD=your_password_here
-POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech
-POSTGRES_PORT=5432
-POSTGRES_DB=neondb
-LLM_PROVIDER=openai
-HOST=0.0.0.0
-PORT=8000
-ENVIRONMENT=production
-ENVEOF
+              echo 'OPENAI_API_KEY=your_key_here' | sudo tee /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_USER=neondb_owner' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_PASSWORD=your_password_here' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_PORT=5432' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'POSTGRES_DB=neondb' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'LLM_PROVIDER=openai' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'HOST=0.0.0.0' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'PORT=8000' | sudo tee -a /var/www/langchain/.env > /dev/null
+              echo 'ENVIRONMENT=production' | sudo tee -a /var/www/langchain/.env > /dev/null
               sudo chmod 600 /var/www/langchain/.env
               sudo chown ubuntu:ubuntu /var/www/langchain/.env
               echo "⚠️ Created .env template - please update with actual values!"
             else
               echo "✅ .env file exists"
+              # LLM_PROVIDER가 openai로 설정되어 있는지 확인
+              if ! grep -q "LLM_PROVIDER=openai" /var/www/langchain/.env; then
+                echo "⚠️ LLM_PROVIDER not set to openai, updating..."
+                # 기존 LLM_PROVIDER 라인 제거 후 추가
+                sudo sed -i '/^LLM_PROVIDER=/d' /var/www/langchain/.env
+                echo 'LLM_PROVIDER=openai' | sudo tee -a /var/www/langchain/.env > /dev/null
+                echo "✅ LLM_PROVIDER set to openai"
+              else
+                echo "✅ LLM_PROVIDER is already set to openai"
+              fi
             fi
+
+            # .env 파일 내용 확인 (민감한 정보는 마스킹)
+            echo "📋 Current .env configuration:"
+            grep -E "^(LLM_PROVIDER|HOST|PORT|ENVIRONMENT)=" /var/www/langchain/.env || echo "⚠️ Some required variables not found"
 
             # 서비스 시작/재시작
             echo "🔄 Starting/Restarting service..."
