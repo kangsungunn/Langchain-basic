@@ -103,6 +103,25 @@ jobs:
 
             echo "🚀 Starting deployment on EC2..."
 
+            # 디스크 공간 확인 및 정리
+            echo "💾 Checking disk space..."
+            df -h /
+            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
+            echo "   Available space: $AVAILABLE_SPACE"
+
+            # 디스크 공간이 부족하면 정리
+            if [ "$(df / | tail -1 | awk '{print $4}' | sed 's/[^0-9]//g')" -lt 1000000 ]; then
+              echo "⚠️ Low disk space detected, cleaning up..."
+              # apt 캐시 정리
+              sudo apt clean
+              # 불필요한 패키지 제거
+              sudo apt autoremove -y
+              # 로그 파일 정리
+              sudo journalctl --vacuum-time=1d
+              echo "✅ Cleanup completed"
+              df -h /
+            fi
+
             # 디렉토리 생성
             sudo mkdir -p /var/www/langchain
             sudo chown -R ubuntu:ubuntu /var/www/langchain
@@ -252,17 +271,68 @@ jobs:
               exit 1
             fi
 
+            # 디스크 공간 확인
+            echo "💾 Checking disk space..."
+            df -h / | tail -1
+            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
+            echo "   Available space: $AVAILABLE_SPACE"
+
             # pip 업그레이드
             pip install --upgrade pip
 
             # 의존성 설치 (app/requirements.txt 기준)
             echo "📦 Installing dependencies..."
             if [ -f "requirements.txt" ]; then
-              pip install -r requirements.txt
+              # CPU 모드: GPU 관련 패키지는 CPU 버전으로 설치
+              echo "🔧 Installing CPU-optimized packages..."
+
+              # 1. 기본 패키지 설치 (GPU 관련 제외)
+              pip install \
+                langchain-core>=0.3.0 \
+                langchain>=0.3.0 \
+                langchain-openai>=0.2.0 \
+                langchain-postgres>=0.0.12 \
+                pgvector>=0.3.0 \
+                psycopg2-binary>=2.9.9 \
+                langchain-text-splitters>=0.3.0 \
+                fastapi>=0.115.0 \
+                "uvicorn[standard]>=0.32.0" \
+                python-dotenv>=1.0.0 || {
+                echo "❌ Failed to install core packages"
+                exit 1
+              }
+
+              # 2. CPU 전용 PyTorch 설치 (GPU 버전보다 훨씬 작음)
+              echo "🔧 Installing CPU-only PyTorch..."
+              pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu || {
+                echo "⚠️ CPU PyTorch installation failed, trying without index..."
+                pip install torch --index-url https://download.pytorch.org/whl/cpu || {
+                  echo "⚠️ PyTorch installation failed, continuing without it..."
+                }
+              }
+
+              # 3. transformers 및 기타 패키지 (bitsandbytes 제외)
+              echo "🔧 Installing transformers and other packages..."
+              pip install \
+                transformers>=4.36.0 \
+                langchain-huggingface>=0.0.1 \
+                accelerate>=0.25.0 \
+                sentencepiece>=0.1.99 || {
+                echo "⚠️ Some packages failed to install, but continuing..."
+              }
+
+              # bitsandbytes는 GPU 전용이므로 CPU 모드에서는 제외
+              echo "ℹ️ Skipping bitsandbytes (GPU-only package)"
+
+              echo "✅ Dependencies installation completed"
             else
               echo "❌ Error: requirements.txt not found in app directory"
               exit 1
             fi
+
+            # 설치 후 디스크 공간 확인
+            echo "💾 Disk space after installation:"
+            df -h / | tail -1
 
             # 서비스 재시작 (있는 경우)
             if systemctl list-unit-files | grep -q langchain-api.service; then
