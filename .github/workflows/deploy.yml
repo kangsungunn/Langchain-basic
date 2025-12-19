@@ -116,15 +116,22 @@ jobs:
             df -h /
 
             # 디스크 사용률 확인 (안전한 방법)
-            DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//' || echo "0")
-            if [ -z "$DISK_USAGE" ] || [ "$DISK_USAGE" = "0" ]; then
-              DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | sed 's/[^0-9]//g' || echo "0")
+            DISK_USAGE_RAW=$(df / | tail -1 | awk '{print $5}' 2>/dev/null || echo "")
+            if [ -n "$DISK_USAGE_RAW" ]; then
+              DISK_USAGE=$(echo "$DISK_USAGE_RAW" | sed 's/%//' | sed 's/[^0-9]//g')
+            else
+              DISK_USAGE="0"
+            fi
+
+            # DISK_USAGE가 비어있거나 숫자가 아니면 기본값 사용
+            if [ -z "$DISK_USAGE" ] || ! [ "$DISK_USAGE" -eq "$DISK_USAGE" ] 2>/dev/null; then
+              DISK_USAGE="0"
             fi
 
             echo "   Disk usage: ${DISK_USAGE}%"
 
             # 디스크 공간이 부족하면 정리 (85% 이상 사용 시)
-            if [ -n "$DISK_USAGE" ] && [ "$DISK_USAGE" -gt 85 ] 2>/dev/null; then
+            if [ "$DISK_USAGE" -gt 85 ] 2>/dev/null; then
               echo "⚠️ Low disk space detected ($DISK_USAGE%), cleaning up..."
               # apt 캐시 정리
               sudo apt clean
@@ -146,32 +153,55 @@ jobs:
             echo "🐍 Checking Python installation..."
             PYTHON_CMD=""
 
-            # 직접 경로 확인 (가장 확실한 방법)
-            if [ -x /usr/bin/python3.12 ] && /usr/bin/python3.12 --version &> /dev/null; then
-              PYTHON_CMD="/usr/bin/python3.12"
-              echo "✅ Found Python 3.12 at: $PYTHON_CMD"
-            elif [ -x /usr/bin/python3 ] && /usr/bin/python3 --version &> /dev/null; then
-              PYTHON_CMD="/usr/bin/python3"
-              echo "✅ Found Python 3 at: $PYTHON_CMD"
-            elif [ -x /usr/bin/python3.11 ] && /usr/bin/python3.11 --version &> /dev/null; then
-              PYTHON_CMD="/usr/bin/python3.11"
-              echo "✅ Found Python 3.11 at: $PYTHON_CMD"
+            # 직접 경로 확인 (가장 확실한 방법) - 순차적으로 확인
+            if [ -x /usr/bin/python3.12 ]; then
+              if /usr/bin/python3.12 --version &> /dev/null; then
+                PYTHON_CMD="/usr/bin/python3.12"
+                echo "✅ Found Python 3.12 at: $PYTHON_CMD"
+              fi
+            fi
+
+            if [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3 ]; then
+              if /usr/bin/python3 --version &> /dev/null; then
+                PYTHON_CMD="/usr/bin/python3"
+                echo "✅ Found Python 3 at: $PYTHON_CMD"
+              fi
+            fi
+
+            if [ -z "$PYTHON_CMD" ] && [ -x /usr/bin/python3.11 ]; then
+              if /usr/bin/python3.11 --version &> /dev/null; then
+                PYTHON_CMD="/usr/bin/python3.11"
+                echo "✅ Found Python 3.11 at: $PYTHON_CMD"
+              fi
+            fi
+
             # command -v로 확인 (PATH에 있는 경우)
-            elif command -v python3.12 &> /dev/null && python3.12 --version &> /dev/null; then
-              PYTHON_CMD="python3.12"
-              echo "✅ Python 3.12 found in PATH: $PYTHON_CMD"
-            elif command -v python3 &> /dev/null && python3 --version &> /dev/null; then
-              PYTHON_CMD="python3"
-              echo "✅ Python 3 found in PATH: $PYTHON_CMD"
-            else
+            if [ -z "$PYTHON_CMD" ] && command -v python3.12 &> /dev/null; then
+              if python3.12 --version &> /dev/null; then
+                PYTHON_CMD="python3.12"
+                echo "✅ Python 3.12 found in PATH: $PYTHON_CMD"
+              fi
+            fi
+
+            if [ -z "$PYTHON_CMD" ] && command -v python3 &> /dev/null; then
+              if python3 --version &> /dev/null; then
+                PYTHON_CMD="python3"
+                echo "✅ Python 3 found in PATH: $PYTHON_CMD"
+              fi
+            fi
+
+            # 모두 실패하면 설치
+            if [ -z "$PYTHON_CMD" ]; then
               echo "⚠️ Python 3 not found! Installing Python 3 and venv..."
               sudo apt update
               sudo apt install -y python3 python3-pip python3-venv
               # 설치 후 다시 확인
               if [ -x /usr/bin/python3 ]; then
                 PYTHON_CMD="/usr/bin/python3"
+                echo "✅ Python 3 installed and found at: $PYTHON_CMD"
               elif command -v python3 &> /dev/null; then
                 PYTHON_CMD="python3"
+                echo "✅ Python 3 installed and found: $PYTHON_CMD"
               fi
             fi
 
@@ -196,7 +226,8 @@ jobs:
             echo "   Detected Python version: $PYTHON_VERSION"
             echo "   Python full version: $PYTHON_FULL_VERSION"
             echo "   Python command: $PYTHON_CMD"
-            echo "   Python path: $(readlink -f $(which "$PYTHON_CMD" 2>/dev/null || echo "$PYTHON_CMD") 2>/dev/null || echo "$PYTHON_CMD")"
+            PYTHON_ACTUAL_PATH=$(which "$PYTHON_CMD" 2>/dev/null || echo "$PYTHON_CMD")
+            echo "   Python path: $PYTHON_ACTUAL_PATH"
 
             # python3-venv 패키지 확인 및 설치
             echo "📦 Ensuring python3-venv package is installed..."
