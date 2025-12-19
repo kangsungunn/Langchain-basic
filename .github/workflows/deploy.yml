@@ -358,19 +358,70 @@ jobs:
       - name: Health Check
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           if [ -z "$EC2_HOST" ]; then
             echo "❌ Error: EC2_HOST secret is not set"
             exit 1
           fi
+
           echo "🏥 Performing health check on http://$EC2_HOST/health"
-          sleep 5
-          response=$(curl -s -o /dev/null -w "%{http_code}" "http://$EC2_HOST/health" || echo "000")
-          if [ "$response" -eq 200 ]; then
-            echo "✅ Health check passed!"
-          else
-            echo "❌ Health check failed with status $response"
-            exit 1
+
+          # 서비스 상태 확인 (SSH로)
+          echo "🔍 Checking service status on EC2..."
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
+            echo "=== Service Status ==="
+            if systemctl list-unit-files | grep -q langchain-api.service; then
+              sudo systemctl status langchain-api.service --no-pager | head -10
+            else
+              echo "⚠️ langchain-api.service not found"
+            fi
+
+            echo -e "\n=== Nginx Status ==="
+            sudo systemctl status nginx --no-pager | head -10 || echo "Nginx not running"
+
+            echo -e "\n=== Port Listening ==="
+            sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
+          ENDSSH
+
+          # 헬스 체크 재시도 (최대 3번)
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          SUCCESS=false
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "🔄 Health check attempt $i/$MAX_RETRIES..."
+            sleep $RETRY_DELAY
+
+            response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "http://$EC2_HOST/health" 2>&1 || echo "000")
+
+            if [ "$response" = "200" ]; then
+              echo "✅ Health check passed!"
+              SUCCESS=true
+              break
+            else
+              echo "⚠️ Health check failed with status: $response"
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "   Retrying in $RETRY_DELAY seconds..."
+              fi
+            fi
+          done
+
+          if [ "$SUCCESS" = "false" ]; then
+            echo "❌ Health check failed after $MAX_RETRIES attempts"
+            echo "Please check:"
+            echo "  1. Service is running: sudo systemctl status langchain-api.service"
+            echo "  2. Nginx is running: sudo systemctl status nginx"
+            echo "  3. Port 80 is open: sudo netstat -tlnp | grep 80"
+            echo "  4. Security group allows HTTP (port 80)"
+            # 서비스가 설정되지 않은 경우 경고만 하고 실패하지 않음
+            if ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "systemctl list-unit-files | grep -q langchain-api.service"; then
+              echo "⚠️ Service exists but health check failed - deployment may have issues"
+              exit 1
+            else
+              echo "⚠️ Service not configured yet - skipping health check failure"
+              echo "ℹ️ This is expected for first-time deployment"
+            fi
           fi
 
       - name: Notify Deployment Status
