@@ -448,45 +448,43 @@ jobs:
               echo "✅ Midm model found"
             fi
 
-            # Systemd 서비스 확인 및 설정
-            if ! systemctl list-unit-files | grep -q langchain-api.service; then
-              echo "⚙️  Creating systemd service..."
+            # Systemd 서비스 설정 (항상 업데이트)
+            echo "⚙️  Updating systemd service..."
 
-              # 로그 디렉토리 생성
-              sudo mkdir -p /var/log/langchain
-              sudo chown -R ubuntu:ubuntu /var/log/langchain
+            # 로그 디렉토리 생성
+            sudo mkdir -p /var/log/langchain
+            sudo chown -R ubuntu:ubuntu /var/log/langchain
 
-              # Systemd 서비스 파일 생성
-              echo '[Unit]' | sudo tee /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'Description=LangChain FastAPI Application' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'After=network.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo '[Service]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'Type=simple' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'User=ubuntu' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'WorkingDirectory=/var/www/langchain' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'Environment="PATH=/var/www/langchain/venv/bin"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'Environment="PYTHONPATH=/var/www/langchain"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              # EnvironmentFile은 선택적 (파일이 없어도 서비스가 시작되도록)
-              if [ -f /var/www/langchain/.env ]; then
-                echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              fi
-              echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn app.api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'TimeoutStartSec=60' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'TimeoutStopSec=30' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'StandardOutput=append:/var/log/langchain/access.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'StandardError=append:/var/log/langchain/error.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo '[Install]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-
-              # 서비스 활성화
-              sudo systemctl daemon-reload
-              sudo systemctl enable langchain-api.service
-              echo "✅ Systemd service created and enabled"
+            # Systemd 서비스 파일 생성/업데이트
+            echo '[Unit]' | sudo tee /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'Description=LangChain FastAPI Application' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'After=network.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo '[Service]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'Type=simple' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'User=ubuntu' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'WorkingDirectory=/var/www/langchain' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'Environment="PATH=/var/www/langchain/venv/bin"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'Environment="PYTHONPATH=/var/www/langchain"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            # EnvironmentFile은 선택적 (파일이 없어도 서비스가 시작되도록)
+            if [ -f /var/www/langchain/.env ]; then
+              echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
             fi
+            echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn app.api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'TimeoutStartSec=60' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'TimeoutStopSec=30' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'StandardOutput=append:/var/log/langchain/access.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'StandardError=append:/var/log/langchain/error.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo '[Install]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+            echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+
+            # 서비스 활성화
+            sudo systemctl daemon-reload
+            sudo systemctl enable langchain-api.service
+            echo "✅ Systemd service updated and enabled"
 
             # .env 파일 확인 및 생성/업데이트
             if [ ! -f /var/www/langchain/.env ]; then
