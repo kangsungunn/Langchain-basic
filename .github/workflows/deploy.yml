@@ -336,24 +336,107 @@ jobs:
             echo "💾 Disk space after installation:"
             df -h / | tail -1
 
-            # 서비스 재시작 (있는 경우)
-            if systemctl list-unit-files | grep -q langchain-api.service; then
-              echo "🔄 Restarting service..."
-              sudo systemctl restart langchain-api.service
+            # Systemd 서비스 확인 및 설정
+            if ! systemctl list-unit-files | grep -q langchain-api.service; then
+              echo "⚙️  Creating systemd service..."
 
-              # 서비스 상태 확인
-              sleep 3
-              if sudo systemctl is-active --quiet langchain-api.service; then
-                echo "✅ Deployment successful!"
-                sudo systemctl status langchain-api.service --no-pager
-              else
-                echo "❌ Deployment failed - service not running!"
-                sudo journalctl -u langchain-api.service -n 50 --no-pager
-                exit 1
-              fi
+              # 로그 디렉토리 생성
+              sudo mkdir -p /var/log/langchain
+              sudo chown -R ubuntu:ubuntu /var/log/langchain
+
+              # Systemd 서비스 파일 생성
+              sudo tee /etc/systemd/system/langchain-api.service > /dev/null << 'EOFSERVICE'
+[Unit]
+Description=LangChain FastAPI Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/langchain/app
+Environment="PATH=/var/www/langchain/venv/bin"
+EnvironmentFile=/var/www/langchain/.env
+ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/langchain/access.log
+StandardError=append:/var/log/langchain/error.log
+
+[Install]
+WantedBy=multi-user.target
+EOFSERVICE
+
+              # 서비스 활성화
+              sudo systemctl daemon-reload
+              sudo systemctl enable langchain-api.service
+              echo "✅ Systemd service created and enabled"
+            fi
+
+            # 서비스 시작/재시작
+            echo "🔄 Starting/Restarting service..."
+            sudo systemctl restart langchain-api.service
+
+            # 서비스 상태 확인
+            sleep 5
+            if sudo systemctl is-active --quiet langchain-api.service; then
+              echo "✅ Service is running!"
+              sudo systemctl status langchain-api.service --no-pager | head -20
+
+              # 포트 확인
+              echo "🔍 Checking if service is listening on port 8000..."
+              sudo netstat -tlnp | grep 8000 || ss -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
+
+              # 로컬 헬스 체크
+              echo "🏥 Testing local health endpoint..."
+              curl -f http://localhost:8000/health || echo "⚠️ Local health check failed"
             else
-              echo "⚠️ Warning: langchain-api.service not found"
-              echo "Service will not be restarted. Please set up the service manually."
+              echo "❌ Service failed to start!"
+              echo "=== Service Status ==="
+              sudo systemctl status langchain-api.service --no-pager
+              echo "=== Recent Logs ==="
+              sudo journalctl -u langchain-api.service -n 50 --no-pager
+              exit 1
+            fi
+
+            # Nginx 설정 확인 및 설정
+            if ! systemctl is-active --quiet nginx 2>/dev/null; then
+              echo "⚠️ Nginx is not running, installing and configuring..."
+              sudo apt update
+              sudo apt install -y nginx
+
+              # Nginx 설정
+              sudo tee /etc/nginx/sites-available/langchain > /dev/null << 'EOFNGINX'
+server {
+    listen 80;
+    server_name _;
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        access_log off;
+    }
+}
+EOFNGINX
+
+              sudo ln -sf /etc/nginx/sites-available/langchain /etc/nginx/sites-enabled/
+              sudo rm -f /etc/nginx/sites-enabled/default
+              sudo nginx -t && sudo systemctl restart nginx
+              sudo systemctl enable nginx
+              echo "✅ Nginx configured and started"
+            else
+              echo "✅ Nginx is already running"
             fi
           ENDSSH
 
