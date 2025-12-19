@@ -126,11 +126,35 @@ jobs:
               echo "✅ Python 3.11 found"
             fi
 
+            # Python 버전 확인 및 venv 패키지 설치
+            PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+            echo "   Detected Python version: $PYTHON_VERSION"
+
             # python3-venv 패키지 확인 및 설치
-            if ! $PYTHON_CMD -m venv --help &> /dev/null 2>&1; then
-              echo "⚠️ python3-venv not available, installing..."
-              sudo apt update
-              sudo apt install -y python3-venv
+            echo "📦 Ensuring python3-venv package is installed..."
+            # Python 버전에 맞는 venv 패키지 설치
+            if [ -n "$PYTHON_VERSION" ]; then
+              # Python 3.12인 경우 python3.12-venv 설치 시도
+              VENV_PKG="python${PYTHON_VERSION}-venv"
+              if ! dpkg -l | grep -q "^ii.*$VENV_PKG"; then
+                echo "⚠️ Installing $VENV_PKG..."
+                sudo apt update
+                sudo apt install -y "$VENV_PKG" || {
+                  echo "⚠️ $VENV_PKG not available, trying python3-venv..."
+                  sudo apt install -y python3-venv
+                }
+              else
+                echo "✅ $VENV_PKG is already installed"
+              fi
+            else
+              # 버전을 확인할 수 없으면 일반 python3-venv 설치
+              if ! dpkg -l | grep -q "^ii.*python3-venv"; then
+                echo "⚠️ Installing python3-venv..."
+                sudo apt update
+                sudo apt install -y python3-venv
+              else
+                echo "✅ python3-venv is already installed"
+              fi
             fi
 
             # 가상 환경 디렉토리 확인 및 생성
@@ -153,16 +177,32 @@ jobs:
               sudo chown -R ubuntu:ubuntu /var/www/langchain
 
               # 가상 환경 생성
-              $PYTHON_CMD -m venv "$VENV_DIR" || {
-                echo "⚠️ Failed with $PYTHON_CMD, trying python3..."
-                python3 -m venv "$VENV_DIR" || {
-                  echo "❌ Virtual environment creation failed!"
-                  echo "Python version: $($PYTHON_CMD --version 2>&1 || python3 --version)"
-                  echo "Checking venv module..."
-                  $PYTHON_CMD -m venv --help || python3 -m venv --help
-                  exit 1
-                }
-              }
+              echo "   Attempting to create virtual environment..."
+              if ! $PYTHON_CMD -m venv "$VENV_DIR" 2>&1; then
+                echo "⚠️ Failed with $PYTHON_CMD, installing required packages..."
+                # ensurepip 문제일 수 있으므로 venv 패키지 재설치
+                sudo apt update
+                if [ -n "$PYTHON_VERSION" ]; then
+                  sudo apt install -y "python${PYTHON_VERSION}-venv" "python${PYTHON_VERSION}-distutils" || {
+                    sudo apt install -y python3-venv python3-distutils
+                  }
+                else
+                  sudo apt install -y python3-venv python3-distutils
+                fi
+
+                # 다시 시도
+                echo "   Retrying virtual environment creation..."
+                if ! $PYTHON_CMD -m venv "$VENV_DIR" 2>&1; then
+                  echo "⚠️ Still failed, trying with python3..."
+                  if ! python3 -m venv "$VENV_DIR" 2>&1; then
+                    echo "❌ Virtual environment creation failed!"
+                    echo "Python version: $($PYTHON_CMD --version 2>&1 || python3 --version)"
+                    echo "Installed venv packages:"
+                    dpkg -l | grep python.*venv || echo "No venv packages found"
+                    exit 1
+                  fi
+                fi
+              fi
 
               # 가상 환경 생성 확인
               if [ ! -d "$VENV_DIR" ]; then
