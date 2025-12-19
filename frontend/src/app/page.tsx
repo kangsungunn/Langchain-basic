@@ -22,8 +22,6 @@ export default function Home() {
   const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -44,7 +42,7 @@ export default function Home() {
 
     try {
       const endpoint = chatMode === 'rag' ? '/api/chat/rag' : '/api/chat/general'
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
