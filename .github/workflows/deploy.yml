@@ -135,10 +135,22 @@ jobs:
 
             # 가상 환경 디렉토리 확인 및 생성
             VENV_DIR="/var/www/langchain/venv"
+            VENV_ACTIVATE="$VENV_DIR/bin/activate"
+
+            # 가상 환경이 불완전한 경우 재생성
+            if [ -d "$VENV_DIR" ] && [ ! -f "$VENV_ACTIVATE" ]; then
+              echo "⚠️ Incomplete virtual environment detected, removing and recreating..."
+              rm -rf "$VENV_DIR"
+            fi
+
             if [ ! -d "$VENV_DIR" ]; then
               echo "🐍 Creating Python virtual environment..."
               echo "   Python command: $PYTHON_CMD"
               echo "   Virtual environment path: $VENV_DIR"
+
+              # 디렉토리 생성
+              sudo mkdir -p /var/www/langchain
+              sudo chown -R ubuntu:ubuntu /var/www/langchain
 
               # 가상 환경 생성
               $PYTHON_CMD -m venv "$VENV_DIR" || {
@@ -158,14 +170,28 @@ jobs:
                 exit 1
               fi
 
-              if [ ! -f "$VENV_DIR/bin/activate" ]; then
+              if [ ! -f "$VENV_ACTIVATE" ]; then
                 echo "❌ Virtual environment activate script not found!"
+                echo "Checking venv directory contents..."
+                ls -la "$VENV_DIR" || echo "Directory does not exist"
+                ls -la "$VENV_DIR/bin" 2>/dev/null || echo "bin directory does not exist"
                 exit 1
               fi
 
               echo "✅ Virtual environment created successfully"
             else
-              echo "✅ Virtual environment already exists"
+              # 가상 환경이 존재하는 경우 완전성 확인
+              if [ -f "$VENV_ACTIVATE" ]; then
+                echo "✅ Virtual environment already exists and is complete"
+              else
+                echo "⚠️ Virtual environment directory exists but is incomplete, recreating..."
+                rm -rf "$VENV_DIR"
+                $PYTHON_CMD -m venv "$VENV_DIR" || python3 -m venv "$VENV_DIR" || {
+                  echo "❌ Failed to recreate virtual environment"
+                  exit 1
+                }
+                echo "✅ Virtual environment recreated successfully"
+              fi
             fi
 
             # app 디렉토리로 이동
@@ -173,13 +199,16 @@ jobs:
 
             # 가상 환경 활성화
             echo "🔌 Activating virtual environment..."
-            if [ -f "$VENV_DIR/bin/activate" ]; then
-              source "$VENV_DIR/bin/activate"
+            if [ -f "$VENV_ACTIVATE" ]; then
+              source "$VENV_ACTIVATE"
               echo "✅ Virtual environment activated"
               echo "   Python: $(which python)"
               echo "   Python version: $(python --version)"
             else
-              echo "❌ Virtual environment activate script not found at $VENV_DIR/bin/activate"
+              echo "❌ Virtual environment activate script not found at $VENV_ACTIVATE"
+              echo "Virtual environment directory contents:"
+              ls -la "$VENV_DIR" 2>/dev/null || echo "Directory does not exist"
+              ls -la "$VENV_DIR/bin" 2>/dev/null || echo "bin directory does not exist"
               exit 1
             fi
 
