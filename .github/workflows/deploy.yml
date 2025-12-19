@@ -464,13 +464,14 @@ jobs:
               echo '[Service]' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Type=simple' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'User=ubuntu' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'WorkingDirectory=/var/www/langchain/app' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'WorkingDirectory=/var/www/langchain' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Environment="PATH=/var/www/langchain/venv/bin"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'Environment="PYTHONPATH=/var/www/langchain"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               # EnvironmentFile은 선택적 (파일이 없어도 서비스가 시작되도록)
               if [ -f /var/www/langchain/.env ]; then
                 echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               fi
-              echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn app.api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'TimeoutStartSec=60' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
