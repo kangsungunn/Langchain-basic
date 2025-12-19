@@ -1,19 +1,25 @@
-name: Deploy to EC2
+name: Deploy app to EC2
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+    paths:
+      - "app/**" # app 폴더 변경시에만 실행
+  workflow_dispatch: # 수동 실행은 항상 가능
 
 jobs:
   deploy:
-    name: Deploy FastAPI to EC2
+    name: Deploy FastAPI app to EC2
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: app # 모든 run 명령은 app/ 기준으로 실행
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.8.0
@@ -31,7 +37,6 @@ jobs:
           echo "🔍 Configuring SSH for EC2 host: $EC2_HOST"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          # ssh-keyscan 시도 (실패해도 계속 진행 - StrictHostKeyChecking=no로 우회)
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>&1 || {
             echo "⚠️ Warning: ssh-keyscan failed, will use StrictHostKeyChecking=no"
           }
@@ -57,7 +62,7 @@ jobs:
           }
           echo "✅ SSH connection test passed"
 
-      - name: Deploy to EC2
+      - name: Deploy app to EC2
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
@@ -66,63 +71,66 @@ jobs:
             echo "❌ Error: EC2_HOST or EC2_USER secret is not set"
             exit 1
           fi
-          echo "🚀 Connecting to $EC2_USER@$EC2_HOST"
+
+          echo "🚀 Deploying app folder to EC2..."
+          echo "📦 Current working directory: $(pwd)"
+          echo "📁 Contents to deploy:"
+          ls -la
+
+          # rsync로 app 폴더 내용만 EC2에 동기화
+          # 현재 working-directory가 app이므로 . 을 사용
+          rsync -avz --delete \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.pytest_cache' \
+            --exclude='.git' \
+            --exclude='*.log' \
+            -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            ./ $EC2_USER@$EC2_HOST:/var/www/langchain/app/ || {
+            echo "❌ rsync failed!"
+            exit 1
+          }
+
+          echo "✅ Files synced to EC2"
+
+          # EC2에서 배포 후 작업 실행
           ssh -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=~/.ssh/known_hosts \
               -o ConnectTimeout=10 \
-              -o ServerAliveInterval=60 \
               $EC2_USER@$EC2_HOST << 'ENDSSH'
             set -e
 
-            echo "🚀 Starting deployment..."
+            echo "🚀 Starting deployment on EC2..."
 
-            # 디렉토리 생성 (없는 경우)
-            if [ ! -d "/var/www/langchain" ]; then
-              echo "📁 Creating application directory..."
-              sudo mkdir -p /var/www/langchain
-              sudo chown -R ubuntu:ubuntu /var/www/langchain
-            fi
+            # 디렉토리 생성
+            sudo mkdir -p /var/www/langchain
+            sudo chown -R ubuntu:ubuntu /var/www/langchain
 
-            # 애플리케이션 디렉토리로 이동
-            cd /var/www/langchain
+            # app 디렉토리로 이동
+            cd /var/www/langchain/app
 
-            # Git 저장소 확인 및 업데이트
-            if [ -d ".git" ]; then
-              echo "📥 Pulling latest changes..."
-              git pull origin main || {
-                echo "⚠️ Git pull failed, trying to reset..."
-                git fetch origin
-                git reset --hard origin/main
-              }
-            else
-              echo "❌ Error: Git repository not found in /var/www/langchain"
-              echo "Please initialize the repository first:"
-              echo "  cd /var/www/langchain"
-              echo "  git clone https://github.com/kangsungunn/EC2-배포.git ."
-              exit 1
-            fi
-
-            # 가상 환경 확인 및 생성
-            if [ ! -d "venv" ]; then
+            # 가상 환경 확인 및 생성 (app 디렉토리 기준)
+            if [ ! -d "../venv" ]; then
               echo "🐍 Creating Python virtual environment..."
+              cd /var/www/langchain
               python3.11 -m venv venv || python3 -m venv venv
+              cd app
             fi
 
             # 가상 환경 활성화
             echo "🔌 Activating virtual environment..."
-            source venv/bin/activate
+            source ../venv/bin/activate
 
             # pip 업그레이드
             pip install --upgrade pip
 
-            # 의존성 설치
+            # 의존성 설치 (app/requirements.txt 기준)
             echo "📦 Installing dependencies..."
             if [ -f "requirements.txt" ]; then
               pip install -r requirements.txt
-            elif [ -f "app/requirements.txt" ]; then
-              pip install -r app/requirements.txt
             else
-              echo "⚠️ Warning: requirements.txt not found"
+              echo "❌ Error: requirements.txt not found in app directory"
+              exit 1
             fi
 
             # 서비스 재시작 (있는 경우)
