@@ -107,6 +107,32 @@ jobs:
             sudo mkdir -p /var/www/langchain
             sudo chown -R ubuntu:ubuntu /var/www/langchain
 
+            # Python 버전 확인 및 설치
+            echo "🐍 Checking Python installation..."
+            if ! command -v python3.11 &> /dev/null; then
+              echo "⚠️ Python 3.11 not found, checking available Python version..."
+              PYTHON_CMD=$(command -v python3 || echo "")
+              if [ -z "$PYTHON_CMD" ]; then
+                echo "❌ Python 3 not found! Installing Python 3 and venv..."
+                sudo apt update
+                sudo apt install -y python3 python3-pip python3-venv
+              else
+                echo "✅ Found: $PYTHON_CMD"
+                PYTHON_VERSION=$($PYTHON_CMD --version)
+                echo "   Version: $PYTHON_VERSION"
+              fi
+            else
+              PYTHON_CMD="python3.11"
+              echo "✅ Python 3.11 found"
+            fi
+
+            # python3-venv 패키지 확인
+            if ! $PYTHON_CMD -m venv --help &> /dev/null; then
+              echo "⚠️ python3-venv not available, installing..."
+              sudo apt update
+              sudo apt install -y python3-venv
+            fi
+
             # app 디렉토리로 이동
             cd /var/www/langchain/app
 
@@ -114,7 +140,14 @@ jobs:
             if [ ! -d "../venv" ]; then
               echo "🐍 Creating Python virtual environment..."
               cd /var/www/langchain
-              python3.11 -m venv venv || python3 -m venv venv
+              $PYTHON_CMD -m venv venv || {
+                echo "❌ Failed to create virtual environment"
+                echo "Trying with system python3..."
+                python3 -m venv venv || {
+                  echo "❌ Virtual environment creation failed!"
+                  exit 1
+                }
+              }
               cd app
             fi
 
