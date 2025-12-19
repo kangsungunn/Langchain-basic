@@ -473,6 +473,8 @@ jobs:
               echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'TimeoutStartSec=60' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              echo 'TimeoutStopSec=30' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'StandardOutput=append:/var/log/langchain/access.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'StandardError=append:/var/log/langchain/error.log' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo '' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
@@ -550,28 +552,56 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl restart langchain-api.service
 
-            # 서비스 상태 확인
-            sleep 8
+            # 서비스가 시작될 때까지 대기 (최대 30초)
+            echo "⏳ Waiting for service to start..."
+            MAX_WAIT=30
+            WAIT_COUNT=0
+            SERVICE_READY=false
+
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              if sudo systemctl is-active --quiet langchain-api.service; then
+                # 포트가 실제로 열렸는지 확인
+                if command -v ss >/dev/null 2>&1; then
+                  if sudo ss -tlnp | grep -q ":8000"; then
+                    SERVICE_READY=true
+                    break
+                  fi
+                elif command -v netstat >/dev/null 2>&1; then
+                  if sudo netstat -tlnp | grep -q ":8000"; then
+                    SERVICE_READY=true
+                    break
+                  fi
+                else
+                  # netstat가 없으면 서비스가 active인지만 확인
+                  SERVICE_READY=true
+                  break
+                fi
+              fi
+              sleep 1
+              WAIT_COUNT=$((WAIT_COUNT + 1))
+              echo "   Waiting... ($WAIT_COUNT/$MAX_WAIT seconds)"
+            done
+
             echo "=== Service Status ==="
             sudo systemctl status langchain-api.service --no-pager | head -30
 
             # 서비스 로그 확인
             echo "=== Recent Service Logs ==="
-            sudo journalctl -u langchain-api.service -n 30 --no-pager || echo "No logs available"
+            sudo journalctl -u langchain-api.service -n 50 --no-pager || echo "No logs available"
 
             # 에러 로그 확인
             echo "=== Error Logs ==="
             if [ -f /var/log/langchain/error.log ]; then
-              tail -30 /var/log/langchain/error.log || echo "Error log file exists but cannot read"
+              tail -50 /var/log/langchain/error.log || echo "Error log file exists but cannot read"
             else
               echo "Error log file not found at /var/log/langchain/error.log"
             fi
 
-            if sudo systemctl is-active --quiet langchain-api.service; then
-              echo "✅ Service is active!"
+            if [ "$SERVICE_READY" = "true" ]; then
+              echo "✅ Service is active and listening on port 8000!"
 
               # 포트 확인 (ss 명령어 사용, netstat 대신)
-              echo "🔍 Checking if service is listening on port 8000..."
+              echo "🔍 Verifying port 8000 is listening..."
               if command -v ss >/dev/null 2>&1; then
                 sudo ss -tlnp | grep 8000 || echo "⚠️ Port 8000 not found in listening ports"
               elif command -v netstat >/dev/null 2>&1; then
@@ -586,25 +616,43 @@ jobs:
               echo "🔍 Checking uvicorn processes..."
               ps aux | grep uvicorn | grep -v grep || echo "⚠️ No uvicorn processes found"
 
-              # 로컬 헬스 체크
+              # 로컬 헬스 체크 (재시도 로직 포함)
               echo "🏥 Testing local health endpoint..."
-              sleep 3
-              if curl -f http://localhost:8000/health >/dev/null 2>&1; then
-                echo "✅ Local health check passed!"
-                curl http://localhost:8000/health
-              else
-                echo "⚠️ Local health check failed"
-                echo "Trying to get response:"
-                curl -v http://localhost:8000/health 2>&1 | head -30 || echo "Connection failed"
+              HEALTH_CHECK_RETRIES=5
+              HEALTH_CHECK_SUCCESS=false
+
+              for i in $(seq 1 $HEALTH_CHECK_RETRIES); do
+                sleep 2
+                if curl -f http://localhost:8000/health >/dev/null 2>&1; then
+                  echo "✅ Local health check passed! (attempt $i/$HEALTH_CHECK_RETRIES)"
+                  curl http://localhost:8000/health
+                  HEALTH_CHECK_SUCCESS=true
+                  break
+                else
+                  echo "⚠️ Health check attempt $i/$HEALTH_CHECK_RETRIES failed"
+                  if [ $i -lt $HEALTH_CHECK_RETRIES ]; then
+                    echo "   Retrying in 2 seconds..."
+                  fi
+                fi
+              done
+
+              if [ "$HEALTH_CHECK_SUCCESS" = "false" ]; then
+                echo "❌ Local health check failed after $HEALTH_CHECK_RETRIES attempts"
+                echo "Trying to get detailed response:"
+                curl -v http://localhost:8000/health 2>&1 | head -50 || echo "Connection failed"
+                echo "=== Checking if port is actually listening ==="
+                sudo ss -tlnp | grep 8000 || sudo netstat -tlnp | grep 8000 || echo "Port 8000 not listening"
+                echo "=== Checking service logs for errors ==="
+                sudo journalctl -u langchain-api.service -n 100 --no-pager | grep -i error || echo "No errors in logs"
               fi
             else
-              echo "❌ Service failed to start or is not active!"
+              echo "❌ Service failed to start or is not listening on port 8000!"
               echo "=== Service Status (Full) ==="
               sudo systemctl status langchain-api.service --no-pager
               echo "=== Service File Content ==="
               sudo cat /etc/systemd/system/langchain-api.service
-              echo "=== Recent Logs ==="
-              sudo journalctl -u langchain-api.service -n 50 --no-pager
+              echo "=== Recent Logs (Last 100 lines) ==="
+              sudo journalctl -u langchain-api.service -n 100 --no-pager
               echo "=== Checking paths ==="
               echo "WorkingDirectory exists: $([ -d /var/www/langchain/app ] && echo 'yes' || echo 'no')"
               echo "Python exists: $([ -f /var/www/langchain/venv/bin/uvicorn ] && echo 'yes' || echo 'no')"
@@ -613,16 +661,23 @@ jobs:
               echo "=== Testing manual import ==="
               cd /var/www/langchain/app
               /var/www/langchain/venv/bin/python3 -c "import sys; sys.path.insert(0, '/var/www/langchain/app'); from api_server_refactored import app; print('Import successful')" 2>&1 || echo "Import failed"
+              echo "=== Port status ==="
+              sudo ss -tlnp | grep -E ':(80|8000)' || sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No services on ports 80 or 8000"
               exit 1
             fi
 
-            # Nginx 설정 확인 및 설정
-            if ! systemctl is-active --quiet nginx 2>/dev/null; then
-              echo "⚠️ Nginx is not running, installing and configuring..."
-              sudo apt update
-              sudo apt install -y nginx
+            # Nginx 설정 확인 및 설정 (서비스가 완전히 시작된 후에만)
+            # 서비스가 정상 작동하는지 먼저 확인
+            if [ "$HEALTH_CHECK_SUCCESS" = "true" ] || [ "$SERVICE_READY" = "true" ]; then
+              echo "✅ Service is ready, configuring Nginx..."
 
-              # Nginx 설정
+              if ! systemctl is-active --quiet nginx 2>/dev/null; then
+                echo "⚠️ Nginx is not running, installing and configuring..."
+                sudo apt update
+                sudo apt install -y nginx
+              fi
+
+              # Nginx 설정 (백엔드 연결 재시도 및 타임아웃 설정 포함)
               echo 'server {' | sudo tee /etc/nginx/sites-available/langchain > /dev/null
               echo '    listen 80;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '    server_name _;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
@@ -631,6 +686,18 @@ jobs:
               echo '    location / {' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_pass http://127.0.0.1:8000;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_http_version 1.1;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        # 백엔드 연결 재시도 설정' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_next_upstream error timeout http_502 http_503;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_next_upstream_tries 3;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_next_upstream_timeout 10s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        # 타임아웃 설정' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_connect_timeout 10s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_send_timeout 60s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_read_timeout 60s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        # 헤더 설정' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_set_header Upgrade $http_upgrade;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_set_header Connection "upgrade";' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_set_header Host $host;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
@@ -642,17 +709,40 @@ jobs:
               echo '' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '    location /health {' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        proxy_pass http://127.0.0.1:8000/health;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_connect_timeout 5s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
+              echo '        proxy_read_timeout 5s;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '        access_log off;' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '    }' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
               echo '}' | sudo tee -a /etc/nginx/sites-available/langchain > /dev/null
 
               sudo ln -sf /etc/nginx/sites-available/langchain /etc/nginx/sites-enabled/
               sudo rm -f /etc/nginx/sites-enabled/default
-              sudo nginx -t && sudo systemctl restart nginx
-              sudo systemctl enable nginx
-              echo "✅ Nginx configured and started"
+
+              # Nginx 설정 테스트
+              if sudo nginx -t; then
+                sudo systemctl restart nginx
+                sudo systemctl enable nginx
+                echo "✅ Nginx configured and restarted"
+
+                # Nginx 재시작 후 잠시 대기
+                sleep 3
+
+                # Nginx를 통한 health check
+                echo "🏥 Testing health check via Nginx..."
+                if curl -f http://localhost/health >/dev/null 2>&1; then
+                  echo "✅ Health check via Nginx passed!"
+                  curl http://localhost/health
+                else
+                  echo "⚠️ Health check via Nginx failed, but service is running on port 8000"
+                fi
+              else
+                echo "❌ Nginx configuration test failed!"
+                sudo nginx -t
+                exit 1
+              fi
             else
-              echo "✅ Nginx is already running"
+              echo "⚠️ Service is not ready, skipping Nginx configuration"
+              echo "   Nginx will be configured on next deployment when service is healthy"
             fi
           ENDSSH
 
@@ -709,23 +799,67 @@ jobs:
             curl -v http://localhost:8000/health 2>&1 | head -30 || echo "Local connection failed"
           ENDSSH
 
-          # 헬스 체크 재시도 (최대 3번)
-          MAX_RETRIES=3
-          RETRY_DELAY=10
+          # 서비스가 실제로 실행 중인지 먼저 확인
+          echo "🔍 Verifying service is running before external health check..."
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
+            echo "=== Service Status ==="
+            sudo systemctl status langchain-api.service --no-pager | head -20 || echo "Service not found"
+
+            echo -e "\n=== Port 8000 Status ==="
+            if command -v ss >/dev/null 2>&1; then
+              sudo ss -tlnp | grep 8000 || echo "Port 8000 not listening"
+            else
+              sudo netstat -tlnp | grep 8000 || echo "Port 8000 not listening"
+            fi
+
+            echo -e "\n=== Nginx Status ==="
+            sudo systemctl status nginx --no-pager | head -15 || echo "Nginx not running"
+
+            echo -e "\n=== Port 80 Status ==="
+            if command -v ss >/dev/null 2>&1; then
+              sudo ss -tlnp | grep ":80 " || echo "Port 80 not listening"
+            else
+              sudo netstat -tlnp | grep ":80 " || echo "Port 80 not listening"
+            fi
+
+            echo -e "\n=== Testing Local Connection (8000) ==="
+            curl -v http://localhost:8000/health 2>&1 | head -20 || echo "Local connection to 8000 failed"
+
+            echo -e "\n=== Testing Local Connection via Nginx (80) ==="
+            curl -v http://localhost/health 2>&1 | head -20 || echo "Local connection via Nginx failed"
+          ENDSSH
+
+          # 헬스 체크 재시도 (최대 5번, 더 긴 대기 시간)
+          MAX_RETRIES=5
+          RETRY_DELAY=15
           SUCCESS=false
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "🔄 Health check attempt $i/$MAX_RETRIES..."
-            sleep $RETRY_DELAY
+            if [ $i -gt 1 ]; then
+              sleep $RETRY_DELAY
+            fi
 
-            response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "http://$EC2_HOST/health" 2>&1 || echo "000")
+            # 상세한 응답 정보 수집
+            response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 15 --max-time 30 "http://$EC2_HOST/health" 2>&1)
+            curl_exit_code=$?
 
             if [ "$response" = "200" ]; then
-              echo "✅ Health check passed!"
+              echo "✅ Health check passed! (HTTP $response)"
+              # 실제 응답 내용도 확인
+              curl -s "http://$EC2_HOST/health" | head -5
               SUCCESS=true
               break
             else
-              echo "⚠️ Health check failed with status: $response"
+              echo "⚠️ Health check failed with status: $response (curl exit code: $curl_exit_code)"
+              if [ "$response" = "000" ] || [ $curl_exit_code -ne 0 ]; then
+                echo "   Connection error - service may not be accessible from outside"
+              elif [ "$response" = "502" ]; then
+                echo "   502 Bad Gateway - Nginx cannot connect to backend (port 8000)"
+              elif [ "$response" = "503" ]; then
+                echo "   503 Service Unavailable - Service may be starting"
+              fi
+
               if [ $i -lt $MAX_RETRIES ]; then
                 echo "   Retrying in $RETRY_DELAY seconds..."
               fi
@@ -734,11 +868,51 @@ jobs:
 
           if [ "$SUCCESS" = "false" ]; then
             echo "❌ Health check failed after $MAX_RETRIES attempts"
+            echo ""
+            echo "🔍 Detailed diagnostics:"
+            ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
+              echo "=== Service Status ==="
+              sudo systemctl status langchain-api.service --no-pager | head -30
+
+              echo -e "\n=== Service Logs (Last 50 lines) ==="
+              sudo journalctl -u langchain-api.service -n 50 --no-pager
+
+              echo -e "\n=== Nginx Status ==="
+              sudo systemctl status nginx --no-pager | head -20
+
+              echo -e "\n=== Nginx Error Logs ==="
+              sudo tail -30 /var/log/nginx/error.log 2>/dev/null || echo "Nginx error log not found"
+
+              echo -e "\n=== Port Status ==="
+              if command -v ss >/dev/null 2>&1; then
+                echo "Port 80:"
+                sudo ss -tlnp | grep ":80 " || echo "  Not listening"
+                echo "Port 8000:"
+                sudo ss -tlnp | grep ":8000" || echo "  Not listening"
+              else
+                echo "Port 80:"
+                sudo netstat -tlnp | grep ":80 " || echo "  Not listening"
+                echo "Port 8000:"
+                sudo netstat -tlnp | grep ":8000" || echo "  Not listening"
+              fi
+
+              echo -e "\n=== Uvicorn Processes ==="
+              ps aux | grep uvicorn | grep -v grep || echo "No uvicorn processes"
+
+              echo -e "\n=== Nginx Configuration ==="
+              sudo cat /etc/nginx/sites-available/langchain 2>/dev/null || echo "Nginx config not found"
+            ENDSSH
+
+            echo ""
             echo "Please check:"
             echo "  1. Service is running: sudo systemctl status langchain-api.service"
             echo "  2. Nginx is running: sudo systemctl status nginx"
-            echo "  3. Port 80 is open: sudo netstat -tlnp | grep 80"
-            echo "  4. Security group allows HTTP (port 80)"
+            echo "  3. Port 80 is listening: sudo ss -tlnp | grep 80"
+            echo "  4. Port 8000 is listening: sudo ss -tlnp | grep 8000"
+            echo "  5. Security group allows HTTP (port 80) from GitHub Actions IPs"
+            echo "  6. Service logs: sudo journalctl -u langchain-api.service -n 100"
+            echo "  7. Nginx error logs: sudo tail -50 /var/log/nginx/error.log"
+
             # 서비스가 설정되지 않은 경우 경고만 하고 실패하지 않음
             if ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "systemctl list-unit-files | grep -q langchain-api.service"; then
               echo "⚠️ Service exists but health check failed - deployment may have issues"

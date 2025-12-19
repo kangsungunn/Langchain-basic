@@ -1,0 +1,16 @@
+[Unit]
+Description=Health Monitor for LangChain API Service
+After=network.target langchain-api.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/health-monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/langchain/health-monitor.log
+StandardError=append:/var/log/langchain/health-monitor.log
+
+[Install]
+WantedBy=multi-user.target
+
