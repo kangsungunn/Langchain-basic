@@ -758,75 +758,16 @@ jobs:
 
           echo "🏥 Performing health check on http://$EC2_HOST/health"
 
-          # 서비스 상태 확인 (SSH로)
+          # 서비스 상태 확인 (SSH로 - 간소화)
           echo "🔍 Checking service status on EC2..."
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
-            echo "=== Service Status ==="
-            if systemctl list-unit-files | grep -q langchain-api.service; then
-              sudo systemctl status langchain-api.service --no-pager | head -30
-            else
-              echo "⚠️ langchain-api.service not found"
-            fi
-
-            echo -e "\n=== Service Logs (Last 30 lines) ==="
-            sudo journalctl -u langchain-api.service -n 30 --no-pager || echo "No logs available"
-
-            echo -e "\n=== Error Logs ==="
-            if [ -f /var/log/langchain/error.log ]; then
-              tail -30 /var/log/langchain/error.log || echo "Cannot read error log"
-            else
-              echo "Error log file not found at /var/log/langchain/error.log"
-            fi
-
-            echo -e "\n=== Nginx Status ==="
-            sudo systemctl status nginx --no-pager | head -15 || echo "Nginx not running"
-
-            echo -e "\n=== Port Listening ==="
-            if command -v ss >/dev/null 2>&1; then
-              sudo ss -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
-            elif command -v netstat >/dev/null 2>&1; then
-              sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
-            else
-              echo "Installing net-tools..."
-              sudo apt install -y net-tools 2>/dev/null || true
-              sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening on port 80 or 8000"
-            fi
-
-            echo -e "\n=== Uvicorn Processes ==="
-            ps aux | grep uvicorn | grep -v grep || echo "No uvicorn processes found"
-
-            echo -e "\n=== Testing Local Connection ==="
-            curl -v http://localhost:8000/health 2>&1 | head -30 || echo "Local connection failed"
-          ENDSSH
-
-          # 서비스가 실제로 실행 중인지 먼저 확인
-          echo "🔍 Verifying service is running before external health check..."
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST bash << 'ENDSSH'
             echo "=== Service Status ==="
             sudo systemctl status langchain-api.service --no-pager | head -20 || echo "Service not found"
-
-            echo -e "\n=== Port 8000 Status ==="
-            if command -v ss >/dev/null 2>&1; then
-              sudo ss -tlnp | grep 8000 || echo "Port 8000 not listening"
-            else
-              sudo netstat -tlnp | grep 8000 || echo "Port 8000 not listening"
-            fi
-
-            echo -e "\n=== Nginx Status ==="
-            sudo systemctl status nginx --no-pager | head -15 || echo "Nginx not running"
-
-            echo -e "\n=== Port 80 Status ==="
-            if command -v ss >/dev/null 2>&1; then
-              sudo ss -tlnp | grep ":80 " || echo "Port 80 not listening"
-            else
-              sudo netstat -tlnp | grep ":80 " || echo "Port 80 not listening"
-            fi
-
-            echo -e "\n=== Testing Local Connection (8000) ==="
-            curl -v http://localhost:8000/health 2>&1 | head -20 || echo "Local connection to 8000 failed"
-
-            echo -e "\n=== Testing Local Connection via Nginx (80) ==="
-            curl -v http://localhost/health 2>&1 | head -20 || echo "Local connection via Nginx failed"
+            echo -e "\n=== Port Status ==="
+            sudo ss -tlnp | grep -E ':(80|8000)' || sudo netstat -tlnp | grep -E ':(80|8000)' || echo "No service listening"
+            echo -e "\n=== Testing Local Connection ==="
+            curl -s http://localhost:8000/health || echo "Local connection failed"
+            curl -s http://localhost/health || echo "Nginx connection failed"
           ENDSSH
 
           # 헬스 체크 재시도 (최대 5번, 더 긴 대기 시간)
@@ -847,8 +788,10 @@ jobs:
             if [ "$response" = "200" ]; then
               echo "✅ Health check passed! (HTTP $response)"
               # 실제 응답 내용도 확인
-              health_response=$(curl -s "http://$EC2_HOST/health" 2>&1)
-              echo "$health_response"
+              health_response=$(curl -s "http://$EC2_HOST/health" 2>&1 || echo "")
+              if [ -n "$health_response" ]; then
+                echo "Response: $health_response"
+              fi
               SUCCESS=true
               break
             else
