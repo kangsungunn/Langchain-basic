@@ -760,7 +760,7 @@ jobs:
 
           # 서비스 상태 확인 (SSH로 - 간소화)
           echo "🔍 Checking service status on EC2..."
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST bash << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
             echo "=== Service Status ==="
             sudo systemctl status langchain-api.service --no-pager | head -20 || echo "Service not found"
             echo -e "\n=== Port Status ==="
@@ -813,49 +813,12 @@ jobs:
           if [ "$SUCCESS" = "false" ]; then
             echo "❌ Health check failed after $MAX_RETRIES attempts"
             echo ""
-            echo "🔍 Detailed diagnostics:"
-            ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'ENDSSH'
-              echo "=== Service Status ==="
-              sudo systemctl status langchain-api.service --no-pager | head -30
-
-              echo -e "\n=== Service Logs (Last 50 lines) ==="
-              sudo journalctl -u langchain-api.service -n 50 --no-pager
-
-              echo -e "\n=== Nginx Status ==="
-              sudo systemctl status nginx --no-pager | head -20
-
-              echo -e "\n=== Nginx Error Logs ==="
-              sudo tail -30 /var/log/nginx/error.log 2>/dev/null || echo "Nginx error log not found"
-
-              echo -e "\n=== Port Status ==="
-              if command -v ss >/dev/null 2>&1; then
-                echo "Port 80:"
-                sudo ss -tlnp | grep ":80 " || echo "  Not listening"
-                echo "Port 8000:"
-                sudo ss -tlnp | grep ":8000" || echo "  Not listening"
-              else
-                echo "Port 80:"
-                sudo netstat -tlnp | grep ":80 " || echo "  Not listening"
-                echo "Port 8000:"
-                sudo netstat -tlnp | grep ":8000" || echo "  Not listening"
-              fi
-
-              echo -e "\n=== Uvicorn Processes ==="
-              ps aux | grep uvicorn | grep -v grep || echo "No uvicorn processes"
-
-              echo -e "\n=== Nginx Configuration ==="
-              sudo cat /etc/nginx/sites-available/langchain 2>/dev/null || echo "Nginx config not found"
-            ENDSSH
-
-            echo ""
             echo "Please check:"
             echo "  1. Service is running: sudo systemctl status langchain-api.service"
             echo "  2. Nginx is running: sudo systemctl status nginx"
             echo "  3. Port 80 is listening: sudo ss -tlnp | grep 80"
             echo "  4. Port 8000 is listening: sudo ss -tlnp | grep 8000"
             echo "  5. Security group allows HTTP (port 80) from GitHub Actions IPs"
-            echo "  6. Service logs: sudo journalctl -u langchain-api.service -n 100"
-            echo "  7. Nginx error logs: sudo tail -50 /var/log/nginx/error.log"
 
             # 서비스가 설정되지 않은 경우 경고만 하고 실패하지 않음
             if ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "systemctl list-unit-files | grep -q langchain-api.service"; then
@@ -865,6 +828,8 @@ jobs:
               echo "⚠️ Service not configured yet - skipping health check failure"
               echo "ℹ️ This is expected for first-time deployment"
             fi
+          else
+            echo "✅ Health check completed successfully!"
           fi
 
       - name: Notify Deployment Status
