@@ -354,7 +354,10 @@ jobs:
               echo 'User=ubuntu' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'WorkingDirectory=/var/www/langchain/app' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Environment="PATH=/var/www/langchain/venv/bin"' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
-              echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              # EnvironmentFile은 선택적 (파일이 없어도 서비스가 시작되도록)
+              if [ -f /var/www/langchain/.env ]; then
+                echo 'EnvironmentFile=/var/www/langchain/.env' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
+              fi
               echo 'ExecStart=/var/www/langchain/venv/bin/uvicorn api_server_refactored:app --host 0.0.0.0 --port 8000 --workers 2' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'Restart=always' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
               echo 'RestartSec=10' | sudo tee -a /etc/systemd/system/langchain-api.service > /dev/null
@@ -370,8 +373,31 @@ jobs:
               echo "✅ Systemd service created and enabled"
             fi
 
+            # .env 파일 확인 및 생성 (없는 경우)
+            if [ ! -f /var/www/langchain/.env ]; then
+              echo "⚠️ .env file not found, creating template..."
+              sudo tee /var/www/langchain/.env > /dev/null << 'ENVEOF'
+OPENAI_API_KEY=your_key_here
+POSTGRES_USER=neondb_owner
+POSTGRES_PASSWORD=your_password_here
+POSTGRES_HOST=ep-mute-boat-a1sgw2su-pooler.ap-southeast-1.aws.neon.tech
+POSTGRES_PORT=5432
+POSTGRES_DB=neondb
+LLM_PROVIDER=openai
+HOST=0.0.0.0
+PORT=8000
+ENVIRONMENT=production
+ENVEOF
+              sudo chmod 600 /var/www/langchain/.env
+              sudo chown ubuntu:ubuntu /var/www/langchain/.env
+              echo "⚠️ Created .env template - please update with actual values!"
+            else
+              echo "✅ .env file exists"
+            fi
+
             # 서비스 시작/재시작
             echo "🔄 Starting/Restarting service..."
+            sudo systemctl daemon-reload
             sudo systemctl restart langchain-api.service
 
             # 서비스 상태 확인
@@ -391,8 +417,15 @@ jobs:
               echo "❌ Service failed to start!"
               echo "=== Service Status ==="
               sudo systemctl status langchain-api.service --no-pager
+              echo "=== Service File Content ==="
+              sudo cat /etc/systemd/system/langchain-api.service
               echo "=== Recent Logs ==="
               sudo journalctl -u langchain-api.service -n 50 --no-pager
+              echo "=== Checking paths ==="
+              echo "WorkingDirectory exists: $([ -d /var/www/langchain/app ] && echo 'yes' || echo 'no')"
+              echo "Python exists: $([ -f /var/www/langchain/venv/bin/uvicorn ] && echo 'yes' || echo 'no')"
+              echo "App file exists: $([ -f /var/www/langchain/app/api_server_refactored.py ] && echo 'yes' || echo 'no')"
+              echo ".env exists: $([ -f /var/www/langchain/.env ] && echo 'yes' || echo 'no')"
               exit 1
             fi
 
