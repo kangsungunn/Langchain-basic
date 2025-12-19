@@ -58,6 +58,8 @@ jobs:
   lint-pr-title:
     name: "validate format"
     runs-on: ubuntu-latest
+    # Dependabot PR은 검증 건너뛰기
+    if: github.actor != 'dependabot[bot]'
     steps:
       - name: "✅ Validate Conventional Commits Format"
         uses: amannn/action-semantic-pull-request@v6
