@@ -136,26 +136,33 @@ jobs:
 
             # Python 버전 확인 및 설치
             echo "🐍 Checking Python installation..."
-            if ! command -v python3.11 &> /dev/null; then
-              echo "⚠️ Python 3.11 not found, checking available Python version..."
-              PYTHON_CMD=$(command -v python3 || echo "")
-              if [ -z "$PYTHON_CMD" ]; then
-                echo "❌ Python 3 not found! Installing Python 3 and venv..."
-                sudo apt update
-                sudo apt install -y python3 python3-pip python3-venv
-              else
-                echo "✅ Found: $PYTHON_CMD"
-                PYTHON_VERSION=$($PYTHON_CMD --version)
-                echo "   Version: $PYTHON_VERSION"
-              fi
-            else
+            PYTHON_CMD=""
+
+            # Python 3.11 확인
+            if command -v python3.11 &> /dev/null; then
               PYTHON_CMD="python3.11"
-              echo "✅ Python 3.11 found"
+              echo "✅ Python 3.11 found: $PYTHON_CMD"
+            # Python 3 확인
+            elif command -v python3 &> /dev/null; then
+              PYTHON_CMD=$(command -v python3)
+              echo "✅ Found Python 3: $PYTHON_CMD"
+            else
+              echo "❌ Python 3 not found! Installing Python 3 and venv..."
+              sudo apt update
+              sudo apt install -y python3 python3-pip python3-venv
+              PYTHON_CMD=$(command -v python3)
             fi
 
-            # Python 버전 확인 및 venv 패키지 설치
+            # PYTHON_CMD가 여전히 비어있으면 에러
+            if [ -z "$PYTHON_CMD" ]; then
+              echo "❌ Failed to find or install Python!"
+              exit 1
+            fi
+
+            # Python 버전 확인
             PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
             echo "   Detected Python version: $PYTHON_VERSION"
+            echo "   Python command: $PYTHON_CMD"
 
             # python3-venv 패키지 확인 및 설치
             echo "📦 Ensuring python3-venv package is installed..."
@@ -196,8 +203,25 @@ jobs:
 
             if [ ! -d "$VENV_DIR" ]; then
               echo "🐍 Creating Python virtual environment..."
+
+              # PYTHON_CMD 확인
+              if [ -z "$PYTHON_CMD" ]; then
+                echo "❌ PYTHON_CMD is not set! Finding Python..."
+                PYTHON_CMD=$(command -v python3 || command -v python3.11 || echo "")
+                if [ -z "$PYTHON_CMD" ]; then
+                  echo "❌ Python not found!"
+                  exit 1
+                fi
+              fi
+
               echo "   Python command: $PYTHON_CMD"
               echo "   Virtual environment path: $VENV_DIR"
+
+              # Python 명령어 확인
+              if ! command -v "$PYTHON_CMD" &> /dev/null; then
+                echo "❌ Python command not found: $PYTHON_CMD"
+                exit 1
+              fi
 
               # 디렉토리 생성
               sudo mkdir -p /var/www/langchain
@@ -205,21 +229,22 @@ jobs:
 
               # 가상 환경 생성
               echo "   Attempting to create virtual environment..."
-              if ! $PYTHON_CMD -m venv "$VENV_DIR" 2>&1; then
+              if ! "$PYTHON_CMD" -m venv "$VENV_DIR" 2>&1; then
                 echo "⚠️ Failed with $PYTHON_CMD, installing required packages..."
                 # ensurepip 문제일 수 있으므로 venv 패키지 재설치
                 sudo apt update
                 if [ -n "$PYTHON_VERSION" ]; then
-                  sudo apt install -y "python${PYTHON_VERSION}-venv" "python${PYTHON_VERSION}-distutils" || {
-                    sudo apt install -y python3-venv python3-distutils
+                  # Ubuntu 24.04에서는 python3-distutils가 필요 없을 수 있음
+                  sudo apt install -y "python${PYTHON_VERSION}-venv" || {
+                    sudo apt install -y python3-venv
                   }
                 else
-                  sudo apt install -y python3-venv python3-distutils
+                  sudo apt install -y python3-venv
                 fi
 
                 # 다시 시도
                 echo "   Retrying virtual environment creation..."
-                if ! $PYTHON_CMD -m venv "$VENV_DIR" 2>&1; then
+                if ! "$PYTHON_CMD" -m venv "$VENV_DIR" 2>&1; then
                   echo "⚠️ Still failed, trying with python3..."
                   if ! python3 -m venv "$VENV_DIR" 2>&1; then
                     echo "❌ Virtual environment creation failed!"
