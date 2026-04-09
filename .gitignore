@@ -180,3 +180,26 @@ app/models/midm/special_tokens_map.json
 app/models/midm/generation_config.json
 app/models/midm/config.json
 
+artifacts/**
+data/**
+
+*.csv
+*.pt
+*.safetensors
+.legacy/
+
+
+# Large training/model backup artifacts
+.legacy/
+**/checkpoint-*/
+**/optimizer.pt
+**/pytorch_model.bin
+**/model.safetensors
+**/*.ckpt
+
+# Large raw data files
+app/data/
+**/*.csv
+
+# Optional: keep small processed datasets only
+# !data/processed/**/*.jsonl

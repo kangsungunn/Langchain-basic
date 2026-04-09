@@ -1,236 +1,100 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import styles from './page.module.css'
+import Link from 'next/link'
 
-type Message = {
-  content: string
-  isUser: boolean
-  sources?: string[]
-  timestamp: string
-}
+export default function HomePage() {
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+            <div className="container mx-auto px-4 py-16">
+                {/* 헤더 */}
+                <header className="text-center mb-16">
+                    <h1 className="text-5xl font-bold text-gray-900 mb-4">
+                        변리사 민사소송법 답안지 첨삭 서비스
+                    </h1>
+                    <p className="text-xl text-gray-600">
+                        AI 기반 자동 첨삭으로 답안의 쟁점, 논리, 표현을 종합적으로 분석합니다
+                    </p>
+                </header>
 
-type ChatMode = 'rag' | 'general'
-type Model = 'openai' | 'midm'
+                {/* 메인 콘텐츠 */}
+                <div className="max-w-4xl mx-auto">
+                    {/* 기능 소개 */}
+                    <div className="grid md:grid-cols-3 gap-8 mb-12">
+                        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+                            <div className="text-4xl mb-4">📊</div>
+                            <h3 className="text-xl font-semibold mb-2">쟁점 분석</h3>
+                            <p className="text-gray-600">
+                                모범 답안과 비교하여 쟁점 포함 여부를 정확히 분석합니다
+                            </p>
+                        </div>
 
-export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [inputValue, setInputValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [chatMode, setChatMode] = useState<ChatMode>('rag')
-  const [model, setModel] = useState<Model>('openai')
-  const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set())
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+                        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+                            <div className="text-4xl mb-4">🧠</div>
+                            <h3 className="text-xl font-semibold mb-2">논리 평가</h3>
+                            <p className="text-gray-600">
+                                논리 일관성과 논증 강도를 체계적으로 평가합니다
+                            </p>
+                        </div>
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+                        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+                            <div className="text-4xl mb-4">✍️</div>
+                            <h3 className="text-xl font-semibold mb-2">표현 검토</h3>
+                            <p className="text-gray-600">
+                                명료성, 격식성, 문법을 종합적으로 검토합니다
+                            </p>
+                        </div>
+                    </div>
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputValue.trim() || isLoading) return
+                    {/* 시작 버튼 */}
+                    <div className="text-center space-y-4">
+                        <Link
+                            href="/upload"
+                            className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-lg px-8 py-4 rounded-lg shadow-lg transition-colors duration-200"
+                        >
+                            답안지 첨삭 시작하기 →
+                        </Link>
+                        <div className="pt-4">
+                            <Link
+                                href="/v1/admin"
+                                className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-colors duration-200"
+                            >
+                                관리자 페이지
+                            </Link>
+                        </div>
+                    </div>
 
-    const userMessage: Message = {
-      content: inputValue,
-      isUser: true,
-      timestamp: new Date().toISOString(),
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setInputValue('')
-    setIsLoading(true)
-
-    try {
-      const endpoint = chatMode === 'rag' ? '/api/chat/rag' : '/api/chat/general'
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: inputValue, model }),
-      })
-
-      if (!response.ok) {
-        throw new Error('서버 오류가 발생했습니다.')
-      }
-
-      const data = await response.json()
-
-      const botMessage: Message = {
-        content: data.answer,
-        isUser: false,
-        sources: data.sources,
-        timestamp: data.timestamp,
-      }
-
-      setMessages(prev => [...prev, botMessage])
-    } catch (error) {
-      const errorMessage: Message = {
-        content: '죄송합니다. 오류가 발생했습니다: ' + (error as Error).message,
-        isUser: false,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const sendExampleQuestion = (question: string) => {
-    setInputValue(question)
-  }
-
-  const toggleSources = (index: number) => {
-    setExpandedSources(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(index)) {
-        newSet.delete(index)
-      } else {
-        newSet.add(index)
-      }
-      return newSet
-    })
-  }
-
-  return (
-    <div className={styles.container}>
-      <div className={styles.chatContainer}>
-        <div className={styles.chatHeader}>
-          <h1>AI Chat</h1>
-          <p>Ask me anything</p>
-
-          <div className={styles.modeSelector}>
-            <button
-              className={`${styles.modeButton} ${chatMode === 'rag' ? styles.active : ''}`}
-              onClick={() => setChatMode('rag')}
-            >
-              📚 Knowledge Base
-              <span className={styles.modeDescription}>RAG Mode</span>
-            </button>
-            <button
-              className={`${styles.modeButton} ${chatMode === 'general' ? styles.active : ''}`}
-              onClick={() => setChatMode('general')}
-            >
-              💬 General
-              <span className={styles.modeDescription}>Free Chat</span>
-            </button>
-          </div>
-
-          <div className={styles.modelSelector}>
-            <span className={styles.modelLabel}>Model:</span>
-            <button
-              className={`${styles.modelButton} ${model === 'openai' ? styles.activeModel : ''}`}
-              onClick={() => setModel('openai')}
-            >
-              🤖 OpenAI
-            </button>
-            <button
-              className={`${styles.modelButton} ${model === 'midm' ? styles.activeModel : ''}`}
-              onClick={() => setModel('midm')}
-            >
-              🦙 Midm
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.chatMessages}>
-          {messages.length === 0 && (
-            <>
-              <div className={styles.messageBot}>
-                <div className={styles.messageAvatar}>🤖</div>
-                <div className={styles.messageContent}>
-                  ㅎㅇ
+                    {/* 사용 방법 */}
+                    <div className="mt-16 bg-white rounded-lg shadow-lg p-8">
+                        <h2 className="text-2xl font-bold mb-6 text-center">사용 방법</h2>
+                        <ol className="space-y-4 text-gray-700">
+                            <li className="flex items-start">
+                                <span className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold mr-4">
+                                    1
+                                </span>
+                                <span>PDF 형식의 문제와 답안지를 준비합니다</span>
+                            </li>
+                            <li className="flex items-start">
+                                <span className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold mr-4">
+                                    2
+                                </span>
+                                <span>답안지 업로드 화면에서 파일을 드래그하거나 선택합니다</span>
+                            </li>
+                            <li className="flex items-start">
+                                <span className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold mr-4">
+                                    3
+                                </span>
+                                <span>첨삭 시작 버튼을 클릭하여 자동 분석을 시작합니다</span>
+                            </li>
+                            <li className="flex items-start">
+                                <span className="flex-shrink-0 w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-semibold mr-4">
+                                    4
+                                </span>
+                                <span>분석 결과를 확인하고 상세 피드백을 받습니다</span>
+                            </li>
+                        </ol>
+                    </div>
                 </div>
-              </div>
-
-              <div className={styles.exampleQuestions}>
-                <button className={styles.exampleBtn} onClick={() => sendExampleQuestion('LangChain이 뭐야?')}>
-                  LangChain
-                </button>
-                <button className={styles.exampleBtn} onClick={() => sendExampleQuestion('RAG가 뭐고 어떻게 작동해?')}>
-                  RAG 설명
-                </button>
-                <button className={styles.exampleBtn} onClick={() => sendExampleQuestion('PGVector를 사용하는 이유는?')}>
-                  PGVector 이유
-                </button>
-                <button className={styles.exampleBtn} onClick={() => sendExampleQuestion('안녕! 오늘 기분 어때?')}>
-                  일상 대화
-                </button>
-              </div>
-            </>
-          )}
-
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={message.isUser ? styles.messageUser : styles.messageBot}
-            >
-              {!message.isUser && <div className={styles.messageAvatar}>🤖</div>}
-              <div className={styles.messageContentWrapper}>
-                <div className={styles.messageContent}>
-                  {message.content}
-                </div>
-                {message.sources && message.sources.length > 0 && !message.isUser && (
-                  <div className={styles.sourcesContainer}>
-                    <button
-                      className={styles.sourcesToggle}
-                      onClick={() => toggleSources(index)}
-                    >
-                      {expandedSources.has(index) ? '📚 출처 숨기기 ▲' : '📚 출처 보기 ▼'}
-                    </button>
-                    {expandedSources.has(index) && (
-                      <div className={styles.sources}>
-                        {message.sources.map((source, idx) => (
-                          <div key={idx} className={styles.sourceItem}>
-                            {source}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              {message.isUser && <div className={styles.messageAvatar}>👤</div>}
             </div>
-          ))}
-
-          {isLoading && (
-            <div className={styles.messageBot}>
-              <div className={styles.messageAvatar}>🤖</div>
-              <div className={styles.messageContent}>
-                <div className={styles.loading}>
-                  <div className={styles.loadingDot}></div>
-                  <div className={styles.loadingDot}></div>
-                  <div className={styles.loadingDot}></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
         </div>
-
-        <div className={styles.chatInputContainer}>
-          <form className={styles.chatInputForm} onSubmit={sendMessage}>
-            <input
-              type="text"
-              className={styles.chatInput}
-              placeholder="메시지를 입력하세요..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              className={styles.chatSendBtn}
-              disabled={isLoading || !inputValue.trim()}
-            >
-              전송
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
+    )
 }
-

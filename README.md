@@ -1,74 +1,271 @@
-<div align="center">
-  <a href="https://www.langchain.com/">
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset=".github/images/logo-dark.svg">
-      <source media="(prefers-color-scheme: dark)" srcset=".github/images/logo-light.svg">
-      <img alt="LangChain Logo" src=".github/images/logo-dark.svg" width="80%">
-    </picture>
-  </a>
-</div>
+# Legal AI Agent - 변리사 업무 지원 AI 에이전트
 
-<div align="center">
-  <h3>The platform for reliable agents.</h3>
-</div>
+## 📋 개요
 
-<div align="center">
-  <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/pypi/l/langchain" alt="PyPI - License"></a>
-  <a href="https://pypistats.org/packages/langchain" target="_blank"><img src="https://img.shields.io/pepy/dt/langchain" alt="PyPI - Downloads"></a>
-  <a href="https://pypi.org/project/langchain/#history" target="_blank"><img src="https://img.shields.io/pypi/v/langchain?label=%20" alt="Version"></a>
-  <a href="https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/langchain-ai/langchain" target="_blank"><img src="https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode" alt="Open in Dev Containers"></a>
-  <a href="https://codespaces.new/langchain-ai/langchain" target="_blank"><img src="https://github.com/codespaces/badge.svg" alt="Open in Github Codespace" title="Open in Github Codespace" width="150" height="20"></a>
-  <a href="https://codspeed.io/langchain-ai/langchain" target="_blank"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed Badge"></a>
-  <a href="https://twitter.com/langchainai" target="_blank"><img src="https://img.shields.io/twitter/url/https/twitter.com/langchainai.svg?style=social&label=Follow%20%40LangChainAI" alt="Twitter / X"></a>
-</div>
+특허·상표 업무를 지원하는 전문 AI 에이전트 시스템
 
-LangChain is a framework for building agents and LLM-powered applications. It helps you chain together interoperable components and third-party integrations to simplify AI application development – all while future-proofing decisions as the underlying technology evolves.
+### 핵심 기능
 
-```bash
-pip install langchain
-```
+1. **Examination (심사 판단)**
+   - 특허성 분석 (신규성/진보성)
+   - 상표성 분석 (식별력/유사도)
+   - 거절 가능성 예측
 
-If you're looking for more advanced customization or agent orchestration, check out [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview), our framework for building controllable agent workflows.
+2. **Dispute (분쟁 대응)**
+   - 무효심판/이의신청 분석
+   - 대응 전략 생성
+   - 판례 기반 논리 구성
+
+3. **Document (문서 자동화)**
+   - 의견서 초안 생성
+   - 보정서 초안 생성
+   - 법률 문서 템플릿
 
 ---
 
-**Documentation**:
+## 🏗️ 프로젝트 구조
 
-- [docs.langchain.com](https://docs.langchain.com/oss/python/langchain/overview) – Comprehensive documentation, including conceptual overviews and guides
-- [reference.langchain.com/python](https://reference.langchain.com/python) – API reference docs for LangChain packages
+```
+legal-ai-agent/
+├── app/                      # EC2 배포 (실행 환경)
+│   ├── api/                 # FastAPI 엔드포인트
+│   │   ├── main.py         # FastAPI 앱
+│   │   ├── examination/    # 심사 판단 API
+│   │   ├── dispute/        # 분쟁 대응 API
+│   │   └── document/       # 문서 자동화 API
+│   │
+│   ├── core/                # 비즈니스 로직 (데이터 분석)
+│   │   ├── examination/    # 특허/상표 분석 엔진
+│   │   ├── dispute/        # 분쟁 대응 엔진
+│   │   ├── document/       # 문서 생성 엔진
+│   │   └── shared/         # 공통 로직
+│   │       ├── models/     # ML 모델 관리
+│   │       ├── rag/        # RAG 검색 엔진
+│   │       ├── legal/      # 법률 유틸
+│   │       └── orchestration/  # LangGraph 오케스트레이션
+│   │
+│   └── domain/              # 도메인 모델
+│       ├── examination/    # Patent, Trademark 모델
+│       ├── dispute/        # Dispute 모델
+│       ├── document/       # Document 모델
+│       └── shared/         # 공통 모델
+│
+├── artifacts/                # S3 배포 (모델 저장소)
+│   ├── models/
+│   │   ├── base/           # 베이스 LLM
+│   │   └── finetuned/      # 법률 LoRA
+│   ├── vectordb/           # 판례 벡터 DB
+│   └── knowledge/          # 법령 지식베이스
+│
+├── training/                 # 모델 훈련
+│   ├── examination/        # 특허/상표 모델 훈련
+│   ├── dispute/            # 분쟁 대응 모델
+│   ├── document/           # 문서 생성 모델
+│   └── shared/             # 공통 훈련 유틸
+│
+└── data/                     # 학습 데이터
+    ├── raw/                # 법령, 판례 원본
+    ├── processed/          # 전처리 완료
+    └── annotations/        # 레이블링
+```
 
-**Discussions**: Visit the [LangChain Forum](https://forum.langchain.com) to connect with the community and share all of your technical questions, ideas, and feedback.
+---
 
-> [!NOTE]
-> Looking for the JS/TS library? Check out [LangChain.js](https://github.com/langchain-ai/langchainjs).
+## 🚀 시작하기
 
-## Why use LangChain?
+### 1. 환경 설정
 
-LangChain helps developers build applications powered by LLMs through a standard interface for models, embeddings, vector stores, and more.
+```bash
+# 저장소 클론
+git clone <repository-url>
+cd legal-ai-agent
 
-Use LangChain for:
+# 가상환경 생성
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-- **Real-time data augmentation**. Easily connect LLMs to diverse data sources and external/internal systems, drawing from LangChain's vast library of integrations with model providers, tools, vector stores, retrievers, and more.
-- **Model interoperability**. Swap models in and out as your engineering team experiments to find the best choice for your application's needs. As the industry frontier evolves, adapt quickly – LangChain's abstractions keep you moving without losing momentum.
-- **Rapid prototyping**. Quickly build and iterate on LLM applications with LangChain's modular, component-based architecture. Test different approaches and workflows without rebuilding from scratch, accelerating your development cycle.
-- **Production-ready features**. Deploy reliable applications with built-in support for monitoring, evaluation, and debugging through integrations like LangSmith. Scale with confidence using battle-tested patterns and best practices.
-- **Vibrant community and ecosystem**. Leverage a rich ecosystem of integrations, templates, and community-contributed components. Benefit from continuous improvements and stay up-to-date with the latest AI developments through an active open-source community.
-- **Flexible abstraction layers**. Work at the level of abstraction that suits your needs - from high-level chains for quick starts to low-level components for fine-grained control. LangChain grows with your application's complexity.
+# 의존성 설치
+pip install -r app/requirements.txt
+```
 
-## LangChain ecosystem
+### 2. 환경 변수 설정
 
-While the LangChain framework can be used standalone, it also integrates seamlessly with any LangChain product, giving developers a full suite of tools when building LLM applications.
+`.env` 파일 생성:
 
-To improve your LLM application development, pair LangChain with:
+```bash
+# 모델 경로
+KOELECTRA_BASE_PATH=artifacts/models/base/koelectra-small-v3-discriminator
+EXAONE_BASE_PATH=artifacts/models/base/exaone-2.4b
 
-- [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) – Build agents that can reliably handle complex tasks with LangGraph, our low-level agent orchestration framework. LangGraph offers customizable architecture, long-term memory, and human-in-the-loop workflows – and is trusted in production by companies like LinkedIn, Uber, Klarna, and GitLab.
-- [Integrations](https://docs.langchain.com/oss/python/integrations/providers/overview) – List of LangChain integrations, including chat & embedding models, tools & toolkits, and more
-- [LangSmith](https://www.langchain.com/langsmith) – Helpful for agent evals and observability. Debug poor-performing LLM app runs, evaluate agent trajectories, gain visibility in production, and improve performance over time.
-- [LangSmith Deployment](https://docs.langchain.com/langsmith/deployments) – Deploy and scale agents effortlessly with a purpose-built deployment platform for long-running, stateful workflows. Discover, reuse, configure, and share agents across teams – and iterate quickly with visual prototyping in [LangSmith Studio](https://docs.langchain.com/langsmith/studio).
-- [Deep Agents](https://github.com/langchain-ai/deepagents) *(new!)* – Build agents that can plan, use subagents, and leverage file systems for complex tasks
+# 데이터베이스
+DATABASE_URL=postgresql://user:pass@localhost:5432/legal_ai
 
-## Additional resources
+# S3 (옵션)
+MODEL_STORAGE=local  # 또는 s3
+S3_BUCKET=legal-ai-models
+```
 
-- [API Reference](https://reference.langchain.com/python) – Detailed reference on navigating base packages and integrations for LangChain.
-- [Contributing Guide](https://docs.langchain.com/oss/python/contributing/overview) – Learn how to contribute to LangChain projects and find good first issues.
-- [Code of Conduct](https://github.com/langchain-ai/langchain/blob/master/.github/CODE_OF_CONDUCT.md) – Our community guidelines and standards for participation.
+### 3. API 서버 실행
+
+```bash
+# 개발 모드
+cd app
+uvicorn api.main:app --reload --port 8000
+
+# 프로덕션 모드
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+### 4. API 문서 확인
+
+브라우저에서 접속:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+---
+
+## 🌟 스타 토폴로지 아키텍처
+
+```
+[User Request]
+    ↓
+[Gateway] (1차 분류)
+    ↓
+[Legal Star Node] (중앙 허브)
+    ↙      ↓      ↘
+[Patent] [Trademark] [Dispute]
+ Branch    Branch      Branch
+    ↘      ↓      ↙
+[Final Decision]
+    ↓
+[Response]
+```
+
+### 흐름 설명
+
+1. **Gateway**: 요청 분류 (특허/상표/분쟁/문서)
+2. **Legal Star Node**: 중앙 의사결정 허브
+3. **Branch**: 전문 분석 에이전트
+4. **Final Decision**: 법률 정책 적용 + 최종 판단
+
+---
+
+## 📚 API 사용 예시
+
+### 특허성 분석
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/examination/patent",
+    json={
+        "title": "인공지능 기반 특허 분석 시스템",
+        "invention_description": "본 발명은 인공지능을 활용하여...",
+        "claims": [
+            "청구항 1: 인공지능 기반 특허 분석 시스템...",
+        ]
+    }
+)
+
+result = response.json()
+print(f"신규성: {result['novelty']}")
+print(f"진보성: {result['inventiveness']}")
+print(f"거절 위험도: {result['rejection_risk']}")
+```
+
+---
+
+## 🔧 개발 가이드
+
+### 새 도메인 추가
+
+1. 폴더 생성
+```bash
+mkdir -p app/api/new_domain
+mkdir -p app/core/new_domain
+mkdir -p app/domain/new_domain
+```
+
+2. API 라우터 작성
+```python
+# app/api/new_domain/router.py
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.post("/analyze")
+async def analyze(request: dict):
+    # 로직 구현
+    return {"result": "success"}
+```
+
+3. `app/api/main.py`에 등록
+```python
+from app.api.new_domain import router as new_domain_router
+app.include_router(new_domain_router, prefix="/api/new_domain")
+```
+
+---
+
+## 🧪 테스트
+
+```bash
+# 단위 테스트
+pytest tests/unit/
+
+# 통합 테스트
+pytest tests/integration/
+
+# 전체 테스트
+pytest tests/
+```
+
+---
+
+## 📦 배포
+
+### 1. artifacts를 S3에 업로드
+
+```bash
+aws s3 sync artifacts/ s3://legal-ai-models/artifacts/
+```
+
+### 2. EC2에서 실행
+
+```bash
+# artifacts 다운로드
+aws s3 sync s3://legal-ai-models/artifacts/ /opt/app/artifacts/
+
+# API 서버 실행
+uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 📝 법적 고지
+
+**중요**: 본 AI 에이전트는 **변리사의 업무를 보조하는 도구**이며, 법률 자문을 대체하지 않습니다.
+
+- ✅ 판단 근거 제공
+- ✅ 위험 시나리오 제시
+- ✅ 대응 옵션 제안
+- ❌ 최종 법률 자문 제공 (전문 변리사와 상의 필수)
+
+---
+
+## 📄 라이선스
+
+MIT License
+
+---
+
+## 📧 문의
+
+- 이메일: contact@legal-ai.com
+- 이슈: [GitHub Issues](https://github.com/your-repo/issues)
+
+---
+
+**버전**: 1.0.0
+**최종 업데이트**: 2026-01-20

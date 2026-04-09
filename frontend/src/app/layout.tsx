@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'LangChain RAG Chatbot',
-  description: '지식 베이스 기반 AI 챗봇 - RAG 및 일반 대화 모드',
+  title: '변리사 민사소송법 답안지 첨삭 서비스',
+  description: 'AI 기반 자동 첨삭으로 답안의 쟁점, 논리, 표현을 종합적으로 분석합니다',
 }
 
 export default function RootLayout({
@@ -13,8 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   )
 }
-

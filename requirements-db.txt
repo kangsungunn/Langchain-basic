@@ -1,0 +1,16 @@
+# DB Layer 의존성
+
+# PostgreSQL 드라이버
+psycopg2-binary==2.9.9
+
+# SQLAlchemy ORM
+sqlalchemy==2.0.25
+
+# 환경 변수 로딩 (.env 파일)
+python-dotenv==1.0.0
+
+# Alembic (DB 마이그레이션, 선택사항)
+alembic==1.13.1
+
+# PGVector (향후 벡터 임베딩용, 선택사항)
+# pgvector==0.2.4
